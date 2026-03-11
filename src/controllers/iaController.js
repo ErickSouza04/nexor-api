@@ -153,4 +153,74 @@ async function insightDiario(req, res) {
   }
 }
 
+// ──────────────────────────────────────────────────────────────
+// /ia/previsao — Previsão do próximo mês com insight
+// ──────────────────────────────────────────────────────────────
+const PREVISAO_SYSTEM = `Você é a Nexor IA, especialista em previsão financeira para micro-empreendedores brasileiros.
+Com base nos dados fornecidos, faça uma previsão realista para o PRÓXIMO MÊS.
+Retorne EXATAMENTE um JSON válido (sem markdown, sem texto externo):
+{
+  "previsao": {
+    "receita":      12500,
+    "receita_sub":  "Tendência de +18% com base nos últimos 3 meses",
+    "lucro":        4200,
+    "lucro_sub":    "Margem de 34% mantida",
+    "insight":      "Frase curta com 1 ação concreta e impacto em R$ para maximizar o resultado"
+  }
+}
+Seja realista. O insight deve ter no máximo 120 caracteres.`
+
+async function previsao(req, res) {
+  try {
+    const { context } = req.body
+    const systemContent = context
+      ? PREVISAO_SYSTEM + '\n\nDados atuais do negócio:\n' + context
+      : PREVISAO_SYSTEM
+    const groqMessages = [
+      { role: 'system', content: systemContent },
+      { role: 'user',   content: 'Gere a previsão para o próximo mês. Retorne apenas o JSON.' }
+    ]
+    const raw    = await groqRequest(groqMessages, 400)
+    const clean  = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    res.json(parsed)
+  } catch (e) {
+    console.error('Previsão IA error:', e)
+    res.status(500).json({ erro: 'Erro ao gerar previsão. Tente novamente.' })
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// /ia/insight-diario — 1 insight prático baseado nos dados reais
+// ──────────────────────────────────────────────────────────────
+const INSIGHT_SYSTEM = `Você é a Nexor IA. Gere UM insight financeiro prático para hoje.
+Retorne APENAS um JSON:
+{
+  "insight": "Texto de 1 frase com emoji, máximo 90 caracteres, com dado real e ação concreta"
+}
+Exemplos:
+- "💡 Sua margem de 37% está 12pp acima da média — mantenha custos fixos sob controle!"
+- "📈 Faturamento +18% — aumente ticket médio em R$ 20 para mais R$ 800/mês"
+- "⚠️ Despesas cresceram 8% — revise contratos de fornecedores esta semana"`
+
+async function insightDiario(req, res) {
+  try {
+    const { context } = req.body
+    const systemContent = context
+      ? INSIGHT_SYSTEM + '\n\nDados:\n' + context
+      : INSIGHT_SYSTEM
+    const groqMessages = [
+      { role: 'system', content: systemContent },
+      { role: 'user',   content: 'Gere o insight do dia. Retorne apenas o JSON.' }
+    ]
+    const raw    = await groqRequest(groqMessages, 150)
+    const clean  = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    res.json(parsed)
+  } catch (e) {
+    console.error('Insight diário error:', e)
+    res.status(500).json({ erro: 'Erro ao gerar insight.' })
+  }
+}
+
 module.exports = { chat, copiloto, previsao, insightDiario }
