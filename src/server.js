@@ -75,7 +75,7 @@ app.use(express.json({ limit: '10kb' }))   // limita o tamanho do payload
 app.use(express.urlencoded({ extended: false, limit: '10kb' }))
 
 // ── 5. ROTAS ─────────────────────────────────────────────
-
+app.use('/api', routes)
 
 // Health check público
 app.get('/health', (req, res) => {
