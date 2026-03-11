@@ -8,7 +8,6 @@ const express     = require('express')
 const helmet      = require('helmet')
 const cors        = require('cors')
 const rateLimit   = require('express-rate-limit')
-const routes      = require('./routes')
 
 const app  = express()
 const PORT = process.env.PORT || 3000
@@ -75,7 +74,6 @@ app.use(express.json({ limit: '10kb' }))   // limita o tamanho do payload
 app.use(express.urlencoded({ extended: false, limit: '10kb' }))
 
 // ── 5. ROTAS ─────────────────────────────────────────────
-app.use('/api', routes)
 
 // Health check público
 app.get('/health', (req, res) => {
