@@ -19,6 +19,8 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
     "uuid": "^9.0.0"
+    "stripe": "^14.0.0"
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
