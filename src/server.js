@@ -84,7 +84,7 @@ app.get('/health', (req, res) => {
 
 // Rota raiz para Railway
 app.get('/', (req, res) => {
-  res.send('Nexor API online 🚀')
+  res.status(200).send('Nexor API online 🚀')
 })
 
 // ── 6. ROTA NÃO ENCONTRADA ───────────────────────────────
