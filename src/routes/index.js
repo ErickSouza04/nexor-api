@@ -58,9 +58,9 @@ router.post('/auth/recuperar-senha',           authCtrl.recuperarSenha)
 
 // ── NEXOR IA — proxy seguro para Claude API ──────────────
 const iaCtrl = require('../controllers/iaController')
-router.post('/ia/chat',           ...privado, iaCtrl.chat)
-router.post('/ia/copiloto',       ...privado, iaCtrl.copiloto)
-router.post('/ia/previsao',       ...privado, iaCtrl.previsao)
-router.post('/ia/insight-diario', ...privado, iaCtrl.insightDiario)
+router.post('/ia/chat',           autenticar, iaCtrl.chat)
+router.post('/ia/copiloto',       autenticar, iaCtrl.copiloto)
+router.post('/ia/previsao',       autenticar, iaCtrl.previsao)
+router.post('/ia/insight-diario', autenticar, iaCtrl.insightDiario)
 
 module.exports = router
