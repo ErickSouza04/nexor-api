@@ -82,6 +82,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Rota raiz para Railway
+app.get('/', (req, res) => {
+  res.send('Nexor API online 🚀')
+})
+
 // ── 6. ROTA NÃO ENCONTRADA ───────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ sucesso: false, erro: 'Rota não encontrada' })
@@ -101,6 +106,7 @@ app.use((err, req, res, next) => {
 })
 
 // ── START ─────────────────────────────────────────────────
+const PORT = process.ev.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`
   ╔══════════════════════════════════════╗
