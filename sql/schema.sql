@@ -19,10 +19,15 @@ CREATE TABLE IF NOT EXISTS usuarios (
   faturamento_medio VARCHAR(100),
   meta_lucro    DECIMAL(10,2) DEFAULT 0,
   pro_labore    DECIMAL(10,2) DEFAULT 0,
-  plano         VARCHAR(50) DEFAULT 'essencial',
-  ativo         BOOLEAN DEFAULT TRUE,
-  criado_em     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  plano                 VARCHAR(50) DEFAULT 'trial',
+  tipo_plano            VARCHAR(20) DEFAULT 'trial',
+  trial_inicio          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  trial_dias            INTEGER DEFAULT 7,
+  plano_expira          TIMESTAMP WITH TIME ZONE,
+  stripe_subscription_id TEXT,
+  ativo                 BOOLEAN DEFAULT TRUE,
+  criado_em             TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  atualizado_em         TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- ─────────────────────────────────────────
@@ -94,6 +99,21 @@ CREATE TABLE IF NOT EXISTS produtos (
   atualizado_em   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- ─────────────────────────────────────────
+-- TABELA: webhook_stripe
+-- ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS webhook_stripe (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  evento          VARCHAR(100) NOT NULL,
+  email           VARCHAR(255),
+  user_id         UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  subscription_id TEXT,
+  processado      BOOLEAN DEFAULT FALSE,
+  criado_em       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_stripe_email ON webhook_stripe(email);
+
 -- ═══════════════════════════════════════════════════════
 -- ROW-LEVEL SECURITY (RLS)
 -- Garante isolamento total entre usuários no nível do banco
@@ -132,6 +152,9 @@ CREATE INDEX idx_despesas_user_data  ON despesas(user_id, data DESC);
 CREATE INDEX idx_despesas_user_mes   ON despesas(user_id, EXTRACT(YEAR FROM data), EXTRACT(MONTH FROM data));
 CREATE INDEX idx_refresh_token       ON refresh_tokens(token);
 CREATE INDEX idx_usuarios_email      ON usuarios(email);
+CREATE INDEX idx_usuarios_plano      ON usuarios(plano);
+CREATE INDEX idx_usuarios_trial      ON usuarios(trial_inicio);
+CREATE INDEX idx_usuarios_stripe     ON usuarios(stripe_subscription_id);
 
 -- ═══════════════════════════════════════════════════════
 -- FUNÇÃO: atualizar timestamp automaticamente

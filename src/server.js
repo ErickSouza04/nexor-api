@@ -9,30 +9,52 @@ const helmet      = require('helmet')
 const cors        = require('cors')
 const rateLimit   = require('express-rate-limit')
 const routes      = require('./routes')
+const { pool }    = require('./config/database')
+
+// ── Validação de variáveis de ambiente obrigatórias ──────
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL']
+const missingEnvs = REQUIRED_ENV.filter(key => !process.env[key])
+if (missingEnvs.length > 0) {
+  console.error(`❌ Variáveis de ambiente obrigatórias não definidas: ${missingEnvs.join(', ')}`)
+  process.exit(1)
+}
 
 const app  = express()
 const PORT = process.env.PORT || 3000
 
 // ── HEALTH CHECK — antes de tudo (Railway precisa disso) ──
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() })
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1')
+    res.status(200).json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() })
+  } catch {
+    res.status(503).json({ status: 'error', db: 'unreachable', timestamp: new Date().toISOString() })
+  }
 })
 
 // ── 1. SEGURANÇA — Headers HTTP ──────────────────────────
 app.use(helmet())
 
-// ── 2. CORS — Aceita todas as origens ──
+// ── 2. CORS — Apenas origens permitidas ─────────────────
+const origensPermitidas = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:3000', 'http://localhost:5173']
+
 app.use(cors({
-  origin: true,
-  methods:      ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  origin: (origin, callback) => {
+    // Permite requisições sem origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true)
+    if (origensPermitidas.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS bloqueado para origem: ${origin}`))
+  },
+  methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials:    true
 }))
 
 // ── 3. RATE LIMITING — Anti força bruta ─────────────────
-// Rotas de auth têm limite mais restrito
 const limiteGeral = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 min
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max:      parseInt(process.env.RATE_LIMIT_MAX) || 100,
   message:  { sucesso: false, erro: 'Muitas requisições. Tente novamente em alguns minutos.' },
   standardHeaders: true,
@@ -40,17 +62,33 @@ const limiteGeral = rateLimit({
 })
 
 const limiteAuth = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutos
-  max: 10,                    // apenas 10 tentativas de login por IP
+  windowMs: 15 * 60 * 1000,
+  max: 10,
   message: { sucesso: false, erro: 'Muitas tentativas de login. Aguarde 15 minutos.' }
 })
 
-app.use('/api', limiteGeral)
-app.use('/api/auth/login',    limiteAuth)
-app.use('/api/auth/cadastro', limiteAuth)
+// IA tem limite menor — protege cota do Groq
+const limiteIA = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { sucesso: false, erro: 'Limite de uso da IA atingido. Aguarde alguns minutos.' }
+})
+
+// Admin com limite muito restrito — protege a chave secreta
+const limiteAdmin = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { erro: 'Muitas tentativas. Aguarde.' }
+})
+
+app.use('/api',              limiteGeral)
+app.use('/api/auth/login',   limiteAuth)
+app.use('/api/auth/cadastro',limiteAuth)
+app.use('/api/ia',           limiteIA)
+app.use('/api/admin',        limiteAdmin)
 
 // ── 4. PARSE DO BODY ─────────────────────────────────────
-app.use(express.json({ limit: '10kb' }))   // limita o tamanho do payload
+app.use(express.json({ limit: '10kb' }))
 app.use(express.urlencoded({ extended: false, limit: '10kb' }))
 
 // ── 5. ROTAS ─────────────────────────────────────────────
@@ -62,11 +100,14 @@ app.use((req, res) => {
 })
 
 // ── 7. HANDLER GLOBAL DE ERROS ───────────────────────────
-// Captura qualquer erro não tratado antes de chegar ao usuário
 app.use((err, req, res, next) => {
+  // Erro de CORS — não expõe detalhes ao cliente
+  if (err.message?.startsWith('CORS bloqueado')) {
+    return res.status(403).json({ sucesso: false, erro: 'Origem não autorizada' })
+  }
+
   console.error('Erro não tratado:', err)
 
-  // Não expõe detalhes do erro em produção
   const mensagem = process.env.NODE_ENV === 'production'
     ? 'Erro interno do servidor'
     : err.message
@@ -75,7 +116,7 @@ app.use((err, req, res, next) => {
 })
 
 // ── START ─────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`
   ╔══════════════════════════════════════╗
   ║   🚀 Nexor API rodando na porta ${PORT}  ║
@@ -83,5 +124,28 @@ app.listen(PORT, () => {
   ╚══════════════════════════════════════╝
   `)
 })
+
+// ── GRACEFUL SHUTDOWN ─────────────────────────────────────
+const shutdown = async (signal) => {
+  console.log(`\n[${signal}] Encerrando servidor graciosamente...`)
+  server.close(async () => {
+    try {
+      await pool.end()
+      console.log('✅ Conexões do banco encerradas. Servidor finalizado.')
+    } catch (err) {
+      console.error('Erro ao encerrar pool:', err.message)
+    }
+    process.exit(0)
+  })
+
+  // Força encerramento após 10s se não concluir
+  setTimeout(() => {
+    console.error('⚠️  Shutdown forçado após timeout.')
+    process.exit(1)
+  }, 10_000)
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT',  () => shutdown('SIGINT'))
 
 module.exports = app

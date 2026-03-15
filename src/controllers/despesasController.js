@@ -4,8 +4,10 @@ const { queryWithUser } = require('../config/database')
 const listar = async (req, res) => {
   try {
     const userId = req.userId
-    const { mes, ano, limite = 50, pagina = 1 } = req.query
-    const offset = (parseInt(pagina) - 1) * parseInt(limite)
+    const { mes, ano } = req.query
+    const limite = Math.min(Math.max(1, parseInt(req.query.limite) || 50), 200)
+    const pagina = Math.max(1, parseInt(req.query.pagina) || 1)
+    const offset = (pagina - 1) * limite
 
     let sql = `SELECT id, valor, categoria, pagamento, descricao, data, criado_em
                FROM despesas WHERE user_id = $1`
@@ -19,7 +21,7 @@ const listar = async (req, res) => {
     }
 
     sql += ` ORDER BY data DESC, criado_em DESC LIMIT $${idx} OFFSET $${idx+1}`
-    params.push(parseInt(limite), offset)
+    params.push(limite, offset)
 
     const resultado = await queryWithUser(userId, sql, params)
     const total = await queryWithUser(userId,
@@ -31,8 +33,8 @@ const listar = async (req, res) => {
       dados: resultado.rows,
       paginacao: {
         total: parseInt(total.rows[0].count),
-        pagina: parseInt(pagina),
-        limite: parseInt(limite)
+        pagina,
+        limite
       }
     })
   } catch (err) {

@@ -1,5 +1,6 @@
 // src/controllers/webhookController.js
 // Webhook Stripe — ativa/cancela planos automaticamente
+const crypto = require('crypto')
 const { query } = require('../config/database')
 
 // Stripe SDK (lazy import para não quebrar se não instalado ainda)
@@ -20,9 +21,14 @@ const stripe = async (req, res) => {
     // Valida assinatura do webhook (garante que veio do Stripe)
     if (webhookSecret) {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+    } else if (process.env.NODE_ENV === 'production') {
+      // Em produção, nunca processa webhook sem validação de assinatura
+      console.error('[STRIPE] CRÍTICO: STRIPE_WEBHOOK_SECRET não configurado em produção!')
+      return res.status(500).json({ erro: 'Configuração do servidor incorreta' })
     } else {
+      // Desenvolvimento/teste sem secret configurado
       event = req.body
-      console.warn('[STRIPE] STRIPE_WEBHOOK_SECRET não configurado — pulando validação')
+      console.warn('[STRIPE] STRIPE_WEBHOOK_SECRET não configurado — pulando validação (apenas dev)')
     }
   } catch (err) {
     console.error('[STRIPE] Assinatura inválida:', err.message)
@@ -117,19 +123,22 @@ const stripe = async (req, res) => {
 
 // ── Helpers ──────────────────────────────────────────────
 async function ativarPlano(email, subscriptionId, planoTipo) {
+  const tipo = ['mensal', 'anual', 'demo'].includes(planoTipo) ? planoTipo : 'mensal'
+
   const resultado = await query(
-    `UPDATE usuarios 
-     SET plano = 'ativo', 
+    `UPDATE usuarios
+     SET plano = 'ativo',
+         tipo_plano = $3,
          stripe_subscription_id = $2,
          plano_expira = NULL,
          atualizado_em = NOW()
      WHERE email = $1
      RETURNING id, nome, email`,
-    [email, subscriptionId || null]
+    [email, subscriptionId || null, tipo]
   )
 
   if (resultado.rows.length) {
-    console.log(`[STRIPE] ✅ Plano ATIVADO: ${email} (${planoTipo || 'assinatura'})`)
+    console.log(`[STRIPE] ✅ Plano ATIVADO: ${email} (${tipo})`)
   } else {
     // Usuário comprou mas ainda não se cadastrou — salva para processar depois
     console.log(`[STRIPE] ⚠️ Usuário não encontrado no banco: ${email}`)
@@ -155,25 +164,43 @@ async function cancelarPlano(email) {
 const ativarManual = async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key']
-    if (adminKey !== process.env.ADMIN_SECRET_KEY) {
+    const adminSecret = process.env.ADMIN_SECRET_KEY
+
+    if (!adminSecret || !adminKey) {
       return res.status(401).json({ erro: 'Não autorizado' })
     }
 
-    const { email, plano } = req.body
+    // Comparação segura contra timing attacks
+    const bufferKey    = Buffer.from(adminKey)
+    const bufferSecret = Buffer.from(adminSecret)
+    const igual = bufferKey.length === bufferSecret.length &&
+      crypto.timingSafeEqual(bufferKey, bufferSecret)
+
+    if (!igual) {
+      console.warn(`[ADMIN] Tentativa com chave inválida — IP: ${req.ip}`)
+      return res.status(401).json({ erro: 'Não autorizado' })
+    }
+
+    const { email, plano, tipo_plano } = req.body
     if (!email || !['ativo', 'trial', 'expirado', 'cancelado'].includes(plano)) {
       return res.status(400).json({ erro: 'Email e plano válido são obrigatórios' })
     }
 
+    const tipo = ['trial', 'demo', 'mensal', 'anual'].includes(tipo_plano) ? tipo_plano : null
+
     const resultado = await query(
-      `UPDATE usuarios SET plano = $1, atualizado_em = NOW()
+      `UPDATE usuarios
+       SET plano = $1,
+           tipo_plano = COALESCE($3, tipo_plano),
+           atualizado_em = NOW()
        WHERE email = $2
-       RETURNING id, nome, email, plano`,
-      [plano, email.toLowerCase().trim()]
+       RETURNING id, nome, email, plano, tipo_plano`,
+      [plano, email.toLowerCase().trim(), tipo]
     )
 
     if (!resultado.rows.length) return res.status(404).json({ erro: 'Usuário não encontrado' })
 
-    console.log(`[ADMIN] Plano de ${email} → '${plano}'`)
+    console.log(`[ADMIN] Plano de ${email} → '${plano}' / tipo: '${resultado.rows[0].tipo_plano}'`)
     res.json({ sucesso: true, usuario: resultado.rows[0] })
   } catch (err) {
     res.status(500).json({ erro: 'Erro interno' })

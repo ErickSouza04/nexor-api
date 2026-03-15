@@ -11,7 +11,7 @@ const gerarTokens = (userId, plano) => {
   const accessToken = jwt.sign(
     { userId, plano },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '4h' }
   )
   return { accessToken, refreshToken: uuidv4() }
 }
@@ -77,7 +77,7 @@ const login = async (req, res) => {
     const { email, senha } = req.body
 
     const resultado = await query(
-      `SELECT id, nome, email, senha_hash, plano, trial_inicio, trial_dias, 
+      `SELECT id, nome, email, senha_hash, plano, tipo_plano, trial_inicio, trial_dias,
               tipo_negocio, faturamento_medio, ativo
        FROM usuarios WHERE email = $1`,
       [email.toLowerCase().trim()]
@@ -108,17 +108,24 @@ const login = async (req, res) => {
     const { accessToken, refreshToken } = gerarTokens(usuario.id, statusPlano.plano)
     await salvarRefreshToken(usuario.id, refreshToken)
 
+    // Remove tokens expirados do usuário (limpeza passiva)
+    await query('DELETE FROM refresh_tokens WHERE user_id = $1 AND expira_em < NOW()', [usuario.id])
+
     res.json({
       sucesso: true,
       token: accessToken,
       refresh_token: refreshToken,
       usuario: {
-        id:             usuario.id,
-        nome:           usuario.nome,
-        email:          usuario.email,
-        plano:          statusPlano.plano,
-        diasRestantes:  statusPlano.diasRestantes,
-        tipo_negocio:   usuario.tipo_negocio,
+        id:               usuario.id,
+        nome:             usuario.nome,
+        email:            usuario.email,
+        plano:            statusPlano.plano,
+        tipo_plano:       statusPlano.tipo_plano,
+        rotulo:           statusPlano.rotulo,
+        preco:            statusPlano.preco,
+        periodo:          statusPlano.periodo,
+        diasRestantes:    statusPlano.diasRestantes,
+        tipo_negocio:     usuario.tipo_negocio,
         faturamento_medio: usuario.faturamento_medio
       }
     })
@@ -174,11 +181,33 @@ const atualizarPerfil = async (req, res) => {
     const { nome, tipo_negocio, faturamento_medio } = req.body
     const resultado = await query(
       `UPDATE usuarios SET nome=$1, tipo_negocio=$2, faturamento_medio=$3, atualizado_em=NOW()
-       WHERE id=$4 RETURNING id, nome, email, tipo_negocio, faturamento_medio, plano`,
+       WHERE id=$4
+       RETURNING id, nome, email, tipo_negocio, faturamento_medio,
+                 plano, tipo_plano, trial_inicio, trial_dias`,
       [nome?.trim(), tipo_negocio, faturamento_medio, req.userId]
     )
     if (!resultado.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })
-    res.json({ sucesso: true, mensagem: 'Perfil atualizado!', usuario: resultado.rows[0] })
+
+    const u = resultado.rows[0]
+    const status = calcularStatusPlano(u)
+
+    res.json({
+      sucesso: true,
+      mensagem: 'Perfil atualizado!',
+      usuario: {
+        id:               u.id,
+        nome:             u.nome,
+        email:            u.email,
+        tipo_negocio:     u.tipo_negocio,
+        faturamento_medio: u.faturamento_medio,
+        plano:            status.plano,
+        tipo_plano:       status.tipo_plano,
+        rotulo:           status.rotulo,
+        preco:            status.preco,
+        periodo:          status.periodo,
+        diasRestantes:    status.diasRestantes,
+      }
+    })
   } catch (err) {
     console.error('Erro ao atualizar perfil:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro interno do servidor' })
@@ -204,7 +233,7 @@ const recuperarSenha = async (req, res) => {
 const statusPlano = async (req, res) => {
   try {
     const result = await query(
-      'SELECT plano, trial_inicio, trial_dias FROM usuarios WHERE id = $1',
+      'SELECT plano, tipo_plano, trial_inicio, trial_dias FROM usuarios WHERE id = $1',
       [req.userId]
     )
     if (!result.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })

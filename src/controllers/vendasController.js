@@ -10,9 +10,10 @@ const { queryWithUser, transaction } = require('../config/database')
 const listar = async (req, res) => {
   try {
     const userId = req.userId  // vem do token JWT, 100% seguro
-    const { mes, ano, limite = 50, pagina = 1 } = req.query
-
-    const offset = (parseInt(pagina) - 1) * parseInt(limite)
+    const { mes, ano } = req.query
+    const limite = Math.min(Math.max(1, parseInt(req.query.limite) || 50), 200)
+    const pagina = Math.max(1, parseInt(req.query.pagina) || 1)
+    const offset = (pagina - 1) * limite
 
     let sql = `
       SELECT id, valor, categoria, pagamento, produto, data, criado_em
@@ -30,7 +31,7 @@ const listar = async (req, res) => {
 
     sql += ` ORDER BY data DESC, criado_em DESC`
     sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
-    params.push(parseInt(limite), offset)
+    params.push(limite, offset)
 
     const resultado = await queryWithUser(userId, sql, params)
 
@@ -44,10 +45,10 @@ const listar = async (req, res) => {
       sucesso: true,
       dados: resultado.rows,
       paginacao: {
-        total: parseInt(total.rows[0].count),
-        pagina: parseInt(pagina),
-        limite: parseInt(limite),
-        paginas: Math.ceil(parseInt(total.rows[0].count) / parseInt(limite))
+        total:   parseInt(total.rows[0].count),
+        pagina,
+        limite,
+        paginas: Math.ceil(parseInt(total.rows[0].count) / limite)
       }
     })
 
