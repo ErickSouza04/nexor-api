@@ -22,7 +22,8 @@ app.use(helmet())
 const ALLOWED_ORIGINS = [
   // Produção — Cloudflare Pages (qualquer subdomínio nexor)
   /^https:\/\/.*\.pages\.dev$/,
-  /^https:\/\/nexor.*\.pages\.dev$/,
+  /^https:\/\/.*\.github\.io$/,
+  /^https:\/\/.*nexor.*/,
   // Permite domínio custom se configurado
   process.env.CORS_ORIGIN,
   // Local dev
