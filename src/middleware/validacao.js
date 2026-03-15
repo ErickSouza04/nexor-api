@@ -31,7 +31,9 @@ const validarCadastro = [
     .normalizeEmail(),
   body('senha')
     .notEmpty().withMessage('Senha é obrigatória')
-    .isLength({ min: 8 }).withMessage('Senha deve ter no mínimo 8 caracteres'),
+    .isLength({ min: 8 }).withMessage('Senha deve ter no mínimo 8 caracteres')
+    .matches(/[0-9]/).withMessage('Senha deve conter pelo menos um número')
+    .matches(/[^a-zA-Z0-9]/).withMessage('Senha deve conter pelo menos um caractere especial (!@#$%...)'),
   checarErros
 ]
 

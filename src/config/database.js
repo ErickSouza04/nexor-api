@@ -54,13 +54,19 @@ const query = async (text, params) => {
 // Define app.current_user_id na sessão do banco
 // O RLS usa esse valor para filtrar os dados automaticamente
 // ─────────────────────────────────────────────────────────
+
+// Valida formato UUID antes de usar em SET LOCAL (PostgreSQL não aceita $1 nesse comando)
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const queryWithUser = async (userId, text, params) => {
+  if (!userId || !UUID_REGEX.test(userId)) {
+    throw new Error('userId inválido para queryWithUser')
+  }
   const client = await pool.connect()
   try {
     // Define o user_id na sessão — ativa as políticas RLS
-    await client.query(
-      `SET LOCAL app.current_user_id = '${userId}'`
-    )
+    // UUID já validado acima, interpolação segura aqui
+    await client.query(`SET LOCAL app.current_user_id = '${userId}'`)
     const result = await client.query(text, params)
     return result
   } finally {
@@ -70,9 +76,13 @@ const queryWithUser = async (userId, text, params) => {
 
 // Para transações (múltiplas operações atômicas)
 const transaction = async (userId, callback) => {
+  if (!userId || !UUID_REGEX.test(userId)) {
+    throw new Error('userId inválido para transaction')
+  }
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    // UUID já validado acima, interpolação segura aqui
     await client.query(`SET LOCAL app.current_user_id = '${userId}'`)
     const result = await callback(client)
     await client.query('COMMIT')

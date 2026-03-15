@@ -1,5 +1,6 @@
 // src/controllers/webhookController.js
 // Webhook Stripe — ativa/cancela planos automaticamente
+const crypto = require('crypto')
 const { query } = require('../config/database')
 
 // Stripe SDK (lazy import para não quebrar se não instalado ainda)
@@ -20,9 +21,14 @@ const stripe = async (req, res) => {
     // Valida assinatura do webhook (garante que veio do Stripe)
     if (webhookSecret) {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+    } else if (process.env.NODE_ENV === 'production') {
+      // Em produção, nunca processa webhook sem validação de assinatura
+      console.error('[STRIPE] CRÍTICO: STRIPE_WEBHOOK_SECRET não configurado em produção!')
+      return res.status(500).json({ erro: 'Configuração do servidor incorreta' })
     } else {
+      // Desenvolvimento/teste sem secret configurado
       event = req.body
-      console.warn('[STRIPE] STRIPE_WEBHOOK_SECRET não configurado — pulando validação')
+      console.warn('[STRIPE] STRIPE_WEBHOOK_SECRET não configurado — pulando validação (apenas dev)')
     }
   } catch (err) {
     console.error('[STRIPE] Assinatura inválida:', err.message)
@@ -158,7 +164,20 @@ async function cancelarPlano(email) {
 const ativarManual = async (req, res) => {
   try {
     const adminKey = req.headers['x-admin-key']
-    if (adminKey !== process.env.ADMIN_SECRET_KEY) {
+    const adminSecret = process.env.ADMIN_SECRET_KEY
+
+    if (!adminSecret || !adminKey) {
+      return res.status(401).json({ erro: 'Não autorizado' })
+    }
+
+    // Comparação segura contra timing attacks
+    const bufferKey    = Buffer.from(adminKey)
+    const bufferSecret = Buffer.from(adminSecret)
+    const igual = bufferKey.length === bufferSecret.length &&
+      crypto.timingSafeEqual(bufferKey, bufferSecret)
+
+    if (!igual) {
+      console.warn(`[ADMIN] Tentativa com chave inválida — IP: ${req.ip}`)
       return res.status(401).json({ erro: 'Não autorizado' })
     }
 

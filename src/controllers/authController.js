@@ -11,7 +11,7 @@ const gerarTokens = (userId, plano) => {
   const accessToken = jwt.sign(
     { userId, plano },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '4h' }
   )
   return { accessToken, refreshToken: uuidv4() }
 }
@@ -107,6 +107,9 @@ const login = async (req, res) => {
 
     const { accessToken, refreshToken } = gerarTokens(usuario.id, statusPlano.plano)
     await salvarRefreshToken(usuario.id, refreshToken)
+
+    // Remove tokens expirados do usuário (limpeza passiva)
+    await query('DELETE FROM refresh_tokens WHERE user_id = $1 AND expira_em < NOW()', [usuario.id])
 
     res.json({
       sucesso: true,
