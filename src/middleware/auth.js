@@ -15,6 +15,11 @@ const PRECOS_PLANO = {
   anual:  { valor: 'R$ 247,90', periodo: 'ano' },
 }
 
+const CTA_PLANOS = {
+  link_mensal: 'https://buy.stripe.com/6oU6oH5ZNcOH7AJ9qR6Na00',
+  link_anual:  'https://buy.stripe.com/cNi9AT1JxcOH8ENcD36Na01',
+}
+
 // ── Calcula status do plano em tempo real ──────────────
 const calcularStatusPlano = (usuario) => {
   const tipo = usuario.tipo_plano || 'trial'
@@ -29,6 +34,7 @@ const calcularStatusPlano = (usuario) => {
       periodo:       preco?.periodo || null,
       diasRestantes: null,
       expirado:      false,
+      cta_planos:    tipo === 'demo' ? CTA_PLANOS : null,
     }
   }
 
