@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   meta_lucro    DECIMAL(10,2) DEFAULT 0,
   pro_labore    DECIMAL(10,2) DEFAULT 0,
   plano                 VARCHAR(50) DEFAULT 'trial',
+  tipo_plano            VARCHAR(20) DEFAULT 'trial',
   trial_inicio          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   trial_dias            INTEGER DEFAULT 7,
   plano_expira          TIMESTAMP WITH TIME ZONE,

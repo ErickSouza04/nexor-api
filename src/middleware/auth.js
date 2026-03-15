@@ -2,11 +2,48 @@
 const jwt = require('jsonwebtoken')
 const { query } = require('../config/database')
 
-// ── Calcula status do trial em tempo real ──────────────
+// ── Configuração de rótulos e preços por tipo de plano ─
+const ROTULOS_PLANO = {
+  trial:  'Teste Grátis',
+  demo:   'Versão Demo',
+  mensal: 'Plano Mensal',
+  anual:  'Plano Anual',
+}
+
+const PRECOS_PLANO = {
+  mensal: { valor: 'R$ 37,90',  periodo: 'mês' },
+  anual:  { valor: 'R$ 247,90', periodo: 'ano' },
+}
+
+// ── Calcula status do plano em tempo real ──────────────
 const calcularStatusPlano = (usuario) => {
-  if (usuario.plano === 'ativo') return { plano: 'ativo', diasRestantes: null, expirado: false }
-  if (usuario.plano === 'cancelado') return { plano: 'cancelado', diasRestantes: 0, expirado: true }
-  
+  const tipo = usuario.tipo_plano || 'trial'
+
+  if (usuario.plano === 'ativo') {
+    const preco = PRECOS_PLANO[tipo] || null
+    return {
+      plano:         'ativo',
+      tipo_plano:    tipo,
+      rotulo:        ROTULOS_PLANO[tipo] || 'Plano Ativo',
+      preco:         preco?.valor || null,
+      periodo:       preco?.periodo || null,
+      diasRestantes: null,
+      expirado:      false,
+    }
+  }
+
+  if (usuario.plano === 'cancelado') {
+    return {
+      plano:         'cancelado',
+      tipo_plano:    tipo,
+      rotulo:        'Plano Cancelado',
+      preco:         null,
+      periodo:       null,
+      diasRestantes: 0,
+      expirado:      true,
+    }
+  }
+
   // trial ou expirado — recalcula sempre
   const inicio = new Date(usuario.trial_inicio)
   const agora = new Date()
@@ -15,9 +52,13 @@ const calcularStatusPlano = (usuario) => {
   const expirado = diasRestantes === 0
 
   return {
-    plano: expirado ? 'expirado' : 'trial',
+    plano:         expirado ? 'expirado' : 'trial',
+    tipo_plano:    'trial',
+    rotulo:        expirado ? 'Teste Expirado' : 'Teste Grátis',
+    preco:         null,
+    periodo:       null,
     diasRestantes,
-    expirado
+    expirado,
   }
 }
 
@@ -34,7 +75,7 @@ const autenticar = async (req, res, next) => {
 
     // Busca usuário atualizado do banco (pega plano/trial atual)
     const result = await query(
-      'SELECT id, plano, trial_inicio, trial_dias, ativo FROM usuarios WHERE id = $1',
+      'SELECT id, plano, tipo_plano, trial_inicio, trial_dias, ativo FROM usuarios WHERE id = $1',
       [decoded.userId]
     )
 

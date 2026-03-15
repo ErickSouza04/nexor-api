@@ -117,19 +117,22 @@ const stripe = async (req, res) => {
 
 // ── Helpers ──────────────────────────────────────────────
 async function ativarPlano(email, subscriptionId, planoTipo) {
+  const tipo = ['mensal', 'anual', 'demo'].includes(planoTipo) ? planoTipo : 'mensal'
+
   const resultado = await query(
-    `UPDATE usuarios 
-     SET plano = 'ativo', 
+    `UPDATE usuarios
+     SET plano = 'ativo',
+         tipo_plano = $3,
          stripe_subscription_id = $2,
          plano_expira = NULL,
          atualizado_em = NOW()
      WHERE email = $1
      RETURNING id, nome, email`,
-    [email, subscriptionId || null]
+    [email, subscriptionId || null, tipo]
   )
 
   if (resultado.rows.length) {
-    console.log(`[STRIPE] ✅ Plano ATIVADO: ${email} (${planoTipo || 'assinatura'})`)
+    console.log(`[STRIPE] ✅ Plano ATIVADO: ${email} (${tipo})`)
   } else {
     // Usuário comprou mas ainda não se cadastrou — salva para processar depois
     console.log(`[STRIPE] ⚠️ Usuário não encontrado no banco: ${email}`)
@@ -159,21 +162,26 @@ const ativarManual = async (req, res) => {
       return res.status(401).json({ erro: 'Não autorizado' })
     }
 
-    const { email, plano } = req.body
+    const { email, plano, tipo_plano } = req.body
     if (!email || !['ativo', 'trial', 'expirado', 'cancelado'].includes(plano)) {
       return res.status(400).json({ erro: 'Email e plano válido são obrigatórios' })
     }
 
+    const tipo = ['trial', 'demo', 'mensal', 'anual'].includes(tipo_plano) ? tipo_plano : null
+
     const resultado = await query(
-      `UPDATE usuarios SET plano = $1, atualizado_em = NOW()
+      `UPDATE usuarios
+       SET plano = $1,
+           tipo_plano = COALESCE($3, tipo_plano),
+           atualizado_em = NOW()
        WHERE email = $2
-       RETURNING id, nome, email, plano`,
-      [plano, email.toLowerCase().trim()]
+       RETURNING id, nome, email, plano, tipo_plano`,
+      [plano, email.toLowerCase().trim(), tipo]
     )
 
     if (!resultado.rows.length) return res.status(404).json({ erro: 'Usuário não encontrado' })
 
-    console.log(`[ADMIN] Plano de ${email} → '${plano}'`)
+    console.log(`[ADMIN] Plano de ${email} → '${plano}' / tipo: '${resultado.rows[0].tipo_plano}'`)
     res.json({ sucesso: true, usuario: resultado.rows[0] })
   } catch (err) {
     res.status(500).json({ erro: 'Erro interno' })
