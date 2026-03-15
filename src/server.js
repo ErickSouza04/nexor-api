@@ -45,9 +45,17 @@ const limiteAuth = rateLimit({
   message: { sucesso: false, erro: 'Muitas tentativas de login. Aguarde 15 minutos.' }
 })
 
+// IA tem limite menor — protege cota do Groq
+const limiteIA = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutos
+  max: 30,                    // 30 requisições de IA por IP/15min
+  message: { sucesso: false, erro: 'Limite de uso da IA atingido. Aguarde alguns minutos.' }
+})
+
 app.use('/api', limiteGeral)
 app.use('/api/auth/login',    limiteAuth)
 app.use('/api/auth/cadastro', limiteAuth)
+app.use('/api/ia',            limiteIA)
 
 // ── 4. PARSE DO BODY ─────────────────────────────────────
 app.use(express.json({ limit: '10kb' }))   // limita o tamanho do payload
