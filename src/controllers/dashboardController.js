@@ -206,18 +206,24 @@ const comparacaoMeses = async (req, res) => {
       [userId]
     )
 
-    // Mescla vendas + despesas por mês
-    const meses = resultado.rows.map(v => {
-      const d = despResult.rows.find(d => d.ano == v.ano && d.mes == v.mes)
-      const fat  = parseFloat(v.faturamento)
+    // Mescla vendas + despesas por mês (inclui meses com só despesas)
+    const todasChaves = new Set()
+    resultado.rows.forEach(v => todasChaves.add(`${parseInt(v.ano)}-${parseInt(v.mes)}`))
+    despResult.rows.forEach(d => todasChaves.add(`${parseInt(d.ano)}-${parseInt(d.mes)}`))
+
+    const meses = Array.from(todasChaves).sort().map(chave => {
+      const [ano, mes] = chave.split('-').map(Number)
+      const v = resultado.rows.find(r => parseInt(r.ano) === ano && parseInt(r.mes) === mes)
+      const d = despResult.rows.find(r => parseInt(r.ano) === ano && parseInt(r.mes) === mes)
+      const fat  = v ? parseFloat(v.faturamento) : 0
       const desp = d ? parseFloat(d.total_despesas) : 0
       return {
-        ano:       parseInt(v.ano),
-        mes:       parseInt(v.mes),
-        faturamento:   fat,
-        despesas:      desp,
-        lucro:         fat - desp,
-        qtd_vendas:    parseInt(v.qtd_vendas)
+        ano,
+        mes,
+        faturamento: fat,
+        despesas:    desp,
+        lucro:       fat - desp,
+        qtd_vendas:  v ? parseInt(v.qtd_vendas) : 0
       }
     })
 
