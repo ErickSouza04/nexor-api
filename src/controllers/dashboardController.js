@@ -37,7 +37,7 @@ const resumoCompleto = async (req, res) => {
     const mesAnterior = mes === 1 ? 12 : mes - 1
     const anoAnterior = mes === 1 ? ano - 1 : ano
     const vendasAnt = await queryWithUser(userId,
-      `SELECT COALESCE(SUM(valor), 0) AS faturamento FROM vendas
+      `SELECT COALESCE(SUM(valor), 0) AS faturamento, COALESCE(AVG(valor), 0) AS ticket_medio FROM vendas
        WHERE user_id = $1 AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`,
       [userId, mesAnterior, anoAnterior]
     )
@@ -75,9 +75,10 @@ const resumoCompleto = async (req, res) => {
         lucro,
         lucro_pos_prolabore: lucro - proLabore,
         margem:          parseFloat(margem.toFixed(2)),
-        qtd_vendas:      parseInt(vendas.rows[0].qtd_vendas),
-        ticket_medio:    parseFloat(vendas.rows[0].ticket_medio),
-        meta:            metaValor,
+        total_vendas:        parseInt(vendas.rows[0].qtd_vendas),
+        ticket_medio:        parseFloat(vendas.rows[0].ticket_medio),
+        ticket_medio_anterior: parseFloat(vendasAnt.rows[0].ticket_medio),
+        meta_valor:          metaValor,
         pro_labore:      proLabore,
         progresso_meta:  parseFloat(progressoMeta.toFixed(1)),
         variacao: {
