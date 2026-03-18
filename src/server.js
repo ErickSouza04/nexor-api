@@ -11,6 +11,37 @@ const rateLimit   = require('express-rate-limit')
 const routes      = require('./routes')
 const { pool }    = require('./config/database')
 
+// ── Auto-migração: garante colunas essenciais no banco ───
+async function runMigrations() {
+  const client = await pool.connect()
+  try {
+    // Colunas de trial e Stripe (migration_trial)
+    await client.query(`
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS trial_inicio          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS trial_dias            INTEGER DEFAULT 7,
+        ADD COLUMN IF NOT EXISTS plano_expira          TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT
+    `)
+    // Coluna tipo_plano (migration_tipo_plano)
+    await client.query(`
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS tipo_plano VARCHAR(20) DEFAULT 'trial'
+    `)
+    // Coluna ativo (migration_ativo)
+    await client.query(`
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE
+    `)
+    await client.query(`UPDATE usuarios SET ativo = TRUE WHERE ativo IS NULL`)
+    console.log('✅ Migrações aplicadas com sucesso.')
+  } catch (err) {
+    console.error('⚠️  Erro nas migrações (não crítico):', err.message)
+  } finally {
+    client.release()
+  }
+}
+
 // ── Validação de variáveis de ambiente obrigatórias ──────
 const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL']
 const missingEnvs = REQUIRED_ENV.filter(key => !process.env[key])
@@ -116,13 +147,14 @@ app.use((err, req, res, next) => {
 })
 
 // ── START ─────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`
   ╔══════════════════════════════════════╗
   ║   🚀 Nexor API rodando na porta ${PORT}  ║
   ║   Ambiente: ${(process.env.NODE_ENV || 'development').padEnd(25)}║
   ╚══════════════════════════════════════╝
   `)
+  await runMigrations()
 })
 
 // ── GRACEFUL SHUTDOWN ─────────────────────────────────────

@@ -101,7 +101,11 @@ const autenticar = async (req, res, next) => {
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({ sucesso: false, erro: 'Sessão expirada. Faça login novamente.', codigo: 'TOKEN_EXPIRADO' })
     }
-    return res.status(401).json({ sucesso: false, erro: 'Token inválido' })
+    if (err.name === 'JsonWebTokenError' || err.name === 'NotBeforeError') {
+      return res.status(401).json({ sucesso: false, erro: 'Token inválido' })
+    }
+    console.error('Erro inesperado no middleware autenticar:', err)
+    return res.status(500).json({ sucesso: false, erro: 'Erro interno ao autenticar' })
   }
 }
 
