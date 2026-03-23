@@ -2,7 +2,7 @@
 const bcrypt = require('bcrypt')
 const jwt    = require('jsonwebtoken')
 const { v4: uuidv4 } = require('uuid')
-const { query } = require('../config/database')
+const { query, pool } = require('../config/database')
 const { calcularStatusPlano } = require('../middleware/auth')
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS) || 12
@@ -29,42 +29,70 @@ const salvarRefreshToken = async (userId, refreshToken) => {
 const cadastrar = async (req, res) => {
   try {
     const { nome, email, senha, tipo_negocio, faturamento_medio } = req.body
+    const emailNorm = email.toLowerCase().trim()
 
-    const existe = await query('SELECT id FROM usuarios WHERE email = $1', [email.toLowerCase().trim()])
+    const existe = await query('SELECT id FROM usuarios WHERE email = $1', [emailNorm])
     if (existe.rows.length > 0) {
       return res.status(409).json({ sucesso: false, erro: 'Não foi possível criar a conta com esses dados' })
     }
 
     const senhaHash = await bcrypt.hash(senha, BCRYPT_ROUNDS)
+    const refreshTokenValue = uuidv4()
 
-    // Novo usuário começa com trial de 7 dias
-    const novoUsuario = await query(
-      `INSERT INTO usuarios (nome, email, senha_hash, tipo_negocio, faturamento_medio, plano, trial_inicio, trial_dias)
-       VALUES ($1, $2, $3, $4, $5, 'trial', NOW(), 7)
-       RETURNING id, nome, email, plano, trial_inicio, trial_dias, criado_em`,
-      [nome.trim(), email.toLowerCase().trim(), senhaHash, tipo_negocio || null, faturamento_medio || null]
-    )
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
 
-    const usuario = novoUsuario.rows[0]
-    const statusPlano = calcularStatusPlano(usuario)
-    const { accessToken, refreshToken } = gerarTokens(usuario.id, statusPlano.plano)
-    await salvarRefreshToken(usuario.id, refreshToken)
+      // Novo usuário começa com trial de 7 dias
+      const novoUsuario = await client.query(
+        `INSERT INTO usuarios (nome, email, senha_hash, tipo_negocio, faturamento_medio, plano, trial_inicio, trial_dias)
+         VALUES ($1, $2, $3, $4, $5, 'trial', NOW(), 7)
+         RETURNING id, nome, email, plano, tipo_plano, trial_inicio, trial_dias,
+                   tipo_negocio, faturamento_medio, criado_em`,
+        [nome.trim(), emailNorm, senhaHash, tipo_negocio || null, faturamento_medio || null]
+      )
 
-    res.status(201).json({
-      sucesso: true,
-      mensagem: 'Conta criada com sucesso! Você tem 7 dias grátis.',
-      token: accessToken,
-      refresh_token: refreshToken,
-      usuario: {
-        id:             usuario.id,
-        nome:           usuario.nome,
-        email:          usuario.email,
-        plano:          statusPlano.plano,
-        diasRestantes:  statusPlano.diasRestantes,
-        tipo_negocio:   usuario.tipo_negocio,
-        faturamento_medio: usuario.faturamento_medio
+      const usuario = novoUsuario.rows[0]
+
+      // Define contexto do usuário para a política RLS de refresh_tokens
+      await client.query(`SET LOCAL app.current_user_id = '${usuario.id}'`)
+      const expiraEm = new Date()
+      expiraEm.setDate(expiraEm.getDate() + 30)
+      await client.query(
+        'INSERT INTO refresh_tokens (user_id, token, expira_em) VALUES ($1, $2, $3)',
+        [usuario.id, refreshTokenValue, expiraEm]
+      )
+
+      await client.query('COMMIT')
+
+      const statusPlano = calcularStatusPlano(usuario)
+      const { accessToken } = gerarTokens(usuario.id, statusPlano.plano)
+
+      res.status(201).json({
+        sucesso: true,
+        mensagem: 'Conta criada com sucesso! Você tem 7 dias grátis.',
+        token: accessToken,
+        refresh_token: refreshTokenValue,
+        usuario: {
+          id:               usuario.id,
+          nome:             usuario.nome,
+          email:            usuario.email,
+          plano:            statusPlano.plano,
+          diasRestantes:    statusPlano.diasRestantes,
+          tipo_negocio:     usuario.tipo_negocio,
+          faturamento_medio: usuario.faturamento_medio
+        }
+      })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      // Trata violação de unicidade (race condition de emails simultâneos)
+      if (err.code === '23505') {
+        return res.status(409).json({ sucesso: false, erro: 'Não foi possível criar a conta com esses dados' })
       }
-    })
+      throw err
+    } finally {
+      client.release()
+    }
   } catch (err) {
     console.error('Erro no cadastro:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro interno do servidor' })
@@ -77,7 +105,7 @@ const login = async (req, res) => {
     const { email, senha } = req.body
 
     const resultado = await query(
-      `SELECT id, nome, email, senha_hash, plano, trial_inicio, trial_dias,
+      `SELECT id, nome, email, senha_hash, plano, tipo_plano, trial_inicio, trial_dias,
               tipo_negocio, faturamento_medio, ativo
        FROM usuarios WHERE email = $1`,
       [email.toLowerCase().trim()]
