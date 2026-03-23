@@ -31,9 +31,20 @@ const cadastrar = async (req, res) => {
     const { nome, email, senha, tipo_negocio, faturamento_medio } = req.body
     const emailNorm = email.toLowerCase().trim()
 
-    const existe = await query('SELECT id FROM usuarios WHERE email = $1', [emailNorm])
+    // Verifica se email já existe; remove usuário órfão (sem token) criado por bug anterior
+    const existe = await query(
+      `SELECT u.id,
+              EXISTS(SELECT 1 FROM refresh_tokens rt WHERE rt.user_id = u.id) AS tem_token
+       FROM usuarios u WHERE u.email = $1`,
+      [emailNorm]
+    )
     if (existe.rows.length > 0) {
-      return res.status(409).json({ sucesso: false, erro: 'Não foi possível criar a conta com esses dados' })
+      const { id: idExistente, tem_token } = existe.rows[0]
+      if (tem_token) {
+        return res.status(409).json({ sucesso: false, erro: 'Não foi possível criar a conta com esses dados' })
+      }
+      // Usuário órfão (nunca completou o cadastro): remove para permitir novo registro
+      await query('DELETE FROM usuarios WHERE id = $1', [idExistente])
     }
 
     const senhaHash = await bcrypt.hash(senha, BCRYPT_ROUNDS)
