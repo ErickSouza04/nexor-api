@@ -43,6 +43,39 @@ const salvar = async (req, res) => {
 }
 
 
+const atualizarProLabore = async (req, res) => {
+  try {
+    const userId = req.userId
+    const { pro_labore } = req.body
+
+    // mes e ano são opcionais — padrão é o mês/ano atual
+    const agora = new Date()
+    const mes = req.body.mes !== undefined ? parseInt(req.body.mes) : agora.getMonth() + 1
+    const ano = req.body.ano !== undefined ? parseInt(req.body.ano) : agora.getFullYear()
+
+    // Atualiza apenas o pro_labore da meta existente
+    const resultado = await queryWithUser(userId,
+      `UPDATE metas SET pro_labore = $1
+       WHERE user_id = $2 AND mes = $3 AND ano = $4
+       RETURNING *`,
+      [parseFloat(pro_labore), userId, mes, ano]
+    )
+
+    if (!resultado.rows.length) {
+      return res.status(404).json({
+        sucesso: false,
+        erro: 'Nenhuma meta encontrada para este mês. Defina uma meta de faturamento primeiro.'
+      })
+    }
+
+    res.json({ sucesso: true, mensagem: 'Pró-labore atualizado com sucesso!', dados: resultado.rows[0] })
+  } catch (err) {
+    console.error('Erro ao atualizar pró-labore:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar pró-labore' })
+  }
+}
+
+
 // ─────────────────────────────────────────────────────────
 
 // src/controllers/produtosController.js — exportado junto por simplicidade
@@ -103,4 +136,4 @@ const deletarProduto = async (req, res) => {
   }
 }
 
-module.exports = { listar, salvar, listarProdutos, criarProduto, deletarProduto }
+module.exports = { listar, salvar, atualizarProLabore, listarProdutos, criarProduto, deletarProduto }

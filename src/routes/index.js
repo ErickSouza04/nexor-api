@@ -6,7 +6,7 @@ const { autenticar, exigirPlanoAtivo } = require('../middleware/auth')
 const {
   validarCadastro, validarLogin,
   validarVenda, validarDespesa,
-  validarMeta, validarProduto, validarUUID
+  validarMeta, validarProLabore, validarProduto, validarUUID
 } = require('../middleware/validacao')
 
 const authCtrl    = require('../controllers/authController')
@@ -56,8 +56,9 @@ router.delete('/despesas/:id',      ...privado, validarUUID,      despesasCtrl.d
 router.get ('/despesas/resumo/mes', ...privado,                  despesasCtrl.resumoMes)
 
 // Metas
-router.get ('/metas',               ...privado,             metasCtrl.listar)
-router.post('/metas',               ...privado, validarMeta, metasCtrl.salvar)
+router.get ('/metas',                  ...privado,                 metasCtrl.listar)
+router.post('/metas',                  ...privado, validarMeta,    metasCtrl.salvar)
+router.put ('/metas/prolabore',        ...privado, validarProLabore, metasCtrl.atualizarProLabore)
 
 // Produtos
 router.get ('/produtos',            ...privado,                 metasCtrl.listarProdutos)
