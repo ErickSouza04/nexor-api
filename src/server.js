@@ -69,7 +69,12 @@ app.use(helmet())
 // ── 2. CORS — Apenas origens permitidas ─────────────────
 const origensPermitidas = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:3000', 'http://localhost:5173']
+  : [
+      'https://usenexor.site',
+      'https://www.usenexor.site',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ]
 
 app.use(cors({
   origin: (origin, callback) => {
