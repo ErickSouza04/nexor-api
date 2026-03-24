@@ -10,6 +10,7 @@ const listar = async (req, res) => {
     )
     res.json({ sucesso: true, dados: resultado.rows })
   } catch (err) {
+    console.error('Erro ao buscar metas:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao buscar metas' })
   }
 }
@@ -31,6 +32,7 @@ const salvar = async (req, res) => {
 
     res.json({ sucesso: true, mensagem: 'Meta salva com sucesso!', dados: resultado.rows[0] })
   } catch (err) {
+    console.error('Erro ao salvar meta:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao salvar meta' })
   }
 }
@@ -50,6 +52,7 @@ const listarProdutos = async (req, res) => {
     )
     res.json({ sucesso: true, dados: resultado.rows })
   } catch (err) {
+    console.error('Erro ao buscar produtos:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao buscar produtos' })
   }
 }
@@ -74,6 +77,7 @@ const criarProduto = async (req, res) => {
 
     res.status(201).json({ sucesso: true, dados: resultado.rows[0] })
   } catch (err) {
+    console.error('Erro ao salvar produto:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao salvar produto' })
   }
 }
@@ -89,6 +93,7 @@ const deletarProduto = async (req, res) => {
     if (!resultado.rows.length) return res.status(404).json({ sucesso: false, erro: 'Produto não encontrado' })
     res.json({ sucesso: true, mensagem: 'Produto removido' })
   } catch (err) {
+    console.error('Erro ao remover produto:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao remover produto' })
   }
 }

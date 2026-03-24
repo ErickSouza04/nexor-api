@@ -128,6 +128,11 @@ app.use('/api/ia',           limiteIA)
 app.use('/api/admin',        limiteAdmin)
 
 // ── 4. PARSE DO BODY ─────────────────────────────────────
+// IMPORTANTE: o webhook do Stripe precisa do body cru (Buffer) para validar assinatura.
+// Este middleware DEVE ficar antes do express.json() para capturar o stream antes que
+// ele seja consumido. express.raw() define req._body=true, e express.json() verifica
+// esse flag antes de tentar parsear — garantindo que o body não seja re-processado.
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '10kb' }))
 app.use(express.urlencoded({ extended: false, limit: '10kb' }))
 

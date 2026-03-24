@@ -109,13 +109,21 @@ const autenticar = async (req, res, next) => {
   }
 }
 
-// ── Middleware que bloqueia se trial expirado ──────────
+// ── Middleware que bloqueia se trial expirado ou plano cancelado ──
 const exigirPlanoAtivo = (req, res, next) => {
-  if (req.userPlano === 'expirado' || req.userPlano === 'cancelado') {
+  if (req.userPlano === 'expirado') {
     return res.status(402).json({
       sucesso: false,
       erro: 'Seu período de teste encerrou. Assine para continuar.',
       codigo: 'TRIAL_EXPIRADO',
+      plano: req.userPlano
+    })
+  }
+  if (req.userPlano === 'cancelado') {
+    return res.status(402).json({
+      sucesso: false,
+      erro: 'Sua assinatura foi cancelada. Reative para continuar.',
+      codigo: 'PLANO_CANCELADO',
       plano: req.userPlano
     })
   }

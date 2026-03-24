@@ -25,12 +25,10 @@ router.post('/auth/logout',          autenticar,      authCtrl.logout)
 router.post('/auth/recuperar-senha',                  authCtrl.recuperarSenha)
 router.get ('/auth/plano',           autenticar,      authCtrl.statusPlano)
 
-// ── STRIPE WEBHOOK (raw body — ANTES do express.json!) ──
-// IMPORTANTE: esta rota precisa do body cru (Buffer) para validar assinatura
-router.post('/webhooks/stripe',
-  express.raw({ type: 'application/json' }),
-  webhookCtrl.stripe
-)
+// ── STRIPE WEBHOOK ───────────────────────────────────────
+// O express.raw() é aplicado em server.js (antes do express.json()) para garantir
+// que o body cru (Buffer) chegue aqui intacto para validação da assinatura Stripe.
+router.post('/webhooks/stripe', webhookCtrl.stripe)
 
 // ── ADMIN (chave secreta no header) ─────────────────────
 router.post('/admin/plano', webhookCtrl.ativarManual)

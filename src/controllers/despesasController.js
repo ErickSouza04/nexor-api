@@ -24,17 +24,24 @@ const listar = async (req, res) => {
     params.push(limite, offset)
 
     const resultado = await queryWithUser(userId, sql, params)
-    const total = await queryWithUser(userId,
-      'SELECT COUNT(*) FROM despesas WHERE user_id = $1', [userId]
-    )
+
+    // Conta total para paginação respeitando o mesmo filtro mes/ano
+    let countSql = `SELECT COUNT(*) FROM despesas WHERE user_id = $1`
+    const countParams = [userId]
+    if (mes && ano) {
+      countSql += ` AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`
+      countParams.push(parseInt(mes), parseInt(ano))
+    }
+    const total = await queryWithUser(userId, countSql, countParams)
 
     res.json({
       sucesso: true,
       dados: resultado.rows,
       paginacao: {
-        total: parseInt(total.rows[0].count),
+        total:   parseInt(total.rows[0].count),
         pagina,
-        limite
+        limite,
+        paginas: Math.ceil(parseInt(total.rows[0].count) / limite)
       }
     })
   } catch (err) {

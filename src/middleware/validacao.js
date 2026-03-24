@@ -114,7 +114,15 @@ const validarProduto = [
     .isFloat({ min: 0 }).withMessage('Custo inválido'),
   body('margem_desejada')
     .notEmpty()
-    .isFloat({ min: 0.1, max: 99.9 }).withMessage('Margem deve estar entre 0.1% e 99.9%'),
+    .isFloat({ min: 0.1, max: 99.9 }).withMessage('Margem deve estar entre 0.1% e 99.9%')
+    .custom((value, { req }) => {
+      const margem = parseFloat(value) / 100
+      const taxa = parseFloat(req.body.taxa_percentual || 0) / 100
+      if (margem + taxa >= 1) {
+        throw new Error('A soma de margem e taxa não pode atingir ou ultrapassar 100%')
+      }
+      return true
+    }),
   body('embalagem')
     .optional()
     .isFloat({ min: 0 }),
