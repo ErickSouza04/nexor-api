@@ -103,6 +103,19 @@ const validarMeta = [
   checarErros
 ]
 
+const validarProLabore = [
+  body('pro_labore')
+    .notEmpty().withMessage('Valor do pró-labore é obrigatório')
+    .isFloat({ min: 0 }).withMessage('Pró-labore deve ser zero ou maior'),
+  body('mes')
+    .notEmpty()
+    .isInt({ min: 1, max: 12 }).withMessage('Mês inválido'),
+  body('ano')
+    .notEmpty()
+    .isInt({ min: 2024 }).withMessage('Ano inválido'),
+  checarErros
+]
+
 // ── PRODUTOS ─────────────────────────────────────────────
 const validarProduto = [
   body('nome')
@@ -133,6 +146,6 @@ const validarUUID = [
 module.exports = {
   validarCadastro, validarLogin,
   validarVenda, validarDespesa,
-  validarMeta, validarProduto,
+  validarMeta, validarProLabore, validarProduto,
   validarUUID
 }

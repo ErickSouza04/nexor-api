@@ -24,14 +24,39 @@ const salvar = async (req, res) => {
       `INSERT INTO metas (user_id, valor_meta, mes, ano, pro_labore)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id, mes, ano)
-       DO UPDATE SET valor_meta = $2, pro_labore = $5
+       DO UPDATE SET valor_meta = EXCLUDED.valor_meta, pro_labore = EXCLUDED.pro_labore
        RETURNING *`,
       [userId, parseFloat(valor_meta), parseInt(mes), parseInt(ano), parseFloat(pro_labore || 0)]
     )
 
     res.json({ sucesso: true, mensagem: 'Meta salva com sucesso!', dados: resultado.rows[0] })
   } catch (err) {
+    console.error('Erro ao salvar meta:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao salvar meta' })
+  }
+}
+
+const atualizarProLabore = async (req, res) => {
+  try {
+    const userId = req.userId
+    const { pro_labore, mes, ano } = req.body
+
+    const resultado = await queryWithUser(userId,
+      `UPDATE metas
+       SET pro_labore = $2
+       WHERE user_id = $1 AND mes = $3 AND ano = $4
+       RETURNING *`,
+      [userId, parseFloat(pro_labore), parseInt(mes), parseInt(ano)]
+    )
+
+    if (!resultado.rows.length) {
+      return res.status(404).json({ sucesso: false, erro: 'Meta não encontrada para este mês. Defina a meta primeiro.' })
+    }
+
+    res.json({ sucesso: true, mensagem: 'Pró-labore atualizado com sucesso!', dados: resultado.rows[0] })
+  } catch (err) {
+    console.error('Erro ao atualizar pró-labore:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao atualizar pró-labore' })
   }
 }
 
@@ -93,4 +118,4 @@ const deletarProduto = async (req, res) => {
   }
 }
 
-module.exports = { listar, salvar, listarProdutos, criarProduto, deletarProduto }
+module.exports = { listar, salvar, atualizarProLabore, listarProdutos, criarProduto, deletarProduto }
