@@ -18,7 +18,12 @@ const listar = async (req, res) => {
 const salvar = async (req, res) => {
   try {
     const userId = req.userId
-    const { valor_meta, mes, ano, pro_labore } = req.body
+    const { valor_meta, pro_labore } = req.body
+
+    // mes e ano são opcionais — padrão é o mês/ano atual
+    const agora = new Date()
+    const mes = req.body.mes !== undefined ? parseInt(req.body.mes) : agora.getMonth() + 1
+    const ano = req.body.ano !== undefined ? parseInt(req.body.ano) : agora.getFullYear()
 
     // UPSERT — cria ou atualiza a meta do mês
     const resultado = await queryWithUser(userId,
@@ -27,7 +32,7 @@ const salvar = async (req, res) => {
        ON CONFLICT (user_id, mes, ano)
        DO UPDATE SET valor_meta = $2, pro_labore = $5
        RETURNING *`,
-      [userId, parseFloat(valor_meta), parseInt(mes), parseInt(ano), parseFloat(pro_labore || 0)]
+      [userId, parseFloat(valor_meta), mes, ano, parseFloat(pro_labore || 0)]
     )
 
     res.json({ sucesso: true, mensagem: 'Meta salva com sucesso!', dados: resultado.rows[0] })

@@ -92,10 +92,10 @@ const validarMeta = [
     .notEmpty().withMessage('Valor da meta é obrigatório')
     .isFloat({ min: 1 }).withMessage('Meta deve ser maior que zero'),
   body('mes')
-    .notEmpty()
+    .optional()
     .isInt({ min: 1, max: 12 }).withMessage('Mês inválido'),
   body('ano')
-    .notEmpty()
+    .optional()
     .isInt({ min: 2024 }).withMessage('Ano inválido'),
   body('pro_labore')
     .optional()
