@@ -67,14 +67,18 @@ app.get('/health', async (req, res) => {
 app.use(helmet())
 
 // ── 2. CORS — Apenas origens permitidas ─────────────────
-const origensPermitidas = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : [
-      'https://usenexor.site',
-      'https://www.usenexor.site',
-      'http://localhost:3000',
-      'http://localhost:5173'
-    ]
+// Domínios fixos sempre permitidos (produção + dev local)
+const ORIGENS_FIXAS = [
+  'https://usenexor.site',
+  'https://www.usenexor.site',
+  'http://localhost:3000',
+  'http://localhost:5173',
+]
+// ALLOWED_ORIGINS na env permite adicionar origens extras sem alterar código
+const origensExtras = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : []
+const origensPermitidas = [...new Set([...ORIGENS_FIXAS, ...origensExtras])]
 
 app.use(cors({
   origin: (origin, callback) => {
