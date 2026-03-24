@@ -35,11 +35,14 @@ const listar = async (req, res) => {
 
     const resultado = await queryWithUser(userId, sql, params)
 
-    // Conta total para paginação
-    const total = await queryWithUser(userId,
-      `SELECT COUNT(*) FROM vendas WHERE user_id = $1`,
-      [userId]
-    )
+    // Conta total para paginação respeitando o mesmo filtro mes/ano
+    let countSql = `SELECT COUNT(*) FROM vendas WHERE user_id = $1`
+    const countParams = [userId]
+    if (mes && ano) {
+      countSql += ` AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`
+      countParams.push(parseInt(mes), parseInt(ano))
+    }
+    const total = await queryWithUser(userId, countSql, countParams)
 
     res.json({
       sucesso: true,
