@@ -89,6 +89,10 @@ const cadastrar = async (req, res) => {
           nome:             usuario.nome,
           email:            usuario.email,
           plano:            statusPlano.plano,
+          tipo_plano:       statusPlano.tipo_plano,
+          rotulo:           statusPlano.rotulo,
+          preco:            statusPlano.preco,
+          periodo:          statusPlano.periodo,
           diasRestantes:    statusPlano.diasRestantes,
           tipo_negocio:     usuario.tipo_negocio,
           faturamento_medio: usuario.faturamento_medio
