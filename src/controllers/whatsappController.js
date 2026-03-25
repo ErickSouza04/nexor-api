@@ -13,8 +13,9 @@
 //   7. Responde via whatsappSender.sendMessage()
 // ─────────────────────────────────────────────────────────
 const { query, queryWithUser, transaction } = require('../config/database')
-const { parseMessage }  = require('../services/groqParser')
-const { sendMessage }   = require('../services/whatsappSender')
+const { parseMessage }     = require('../services/groqParser')
+const { sendMessage }      = require('../services/whatsappSender')
+const { transcribeAudio }  = require('../services/whisperTranscriber')
 
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
@@ -318,14 +319,34 @@ const handleWebhook = async (req, res) => {
     const remoteJid = data.key?.remoteJid || ''
     const phone     = remoteJid.split('@')[0]  // ex: "5511999999999@s.whatsapp.net" → "5511999999999"
 
-    const text =
-      data.message?.conversation ||
-      data.message?.extendedTextMessage?.text ||
-      null
+    if (!phone) return
 
-    if (!phone || !text) return  // ignora áudios, imagens, etc.
+    // ── Detecta tipo de mensagem ──────────────────────────
+    const textoPlano = data.message?.conversation || data.message?.extendedTextMessage?.text || null
+    const audioMsg   = data.message?.audioMessage || null
 
-    console.log(`[WHATSAPP] Mensagem de ${phone}: ${text.substring(0, 60)}`)
+    let text = textoPlano
+
+    if (!textoPlano && audioMsg) {
+      // Áudio: transcrever antes de processar
+      const audioData = audioMsg.url || audioMsg.base64 || null
+      const mimeType  = audioMsg.mimetype || 'audio/ogg'
+
+      const transcricao = await transcribeAudio(audioData, mimeType)
+
+      if (!transcricao) {
+        await sendMessage(phone, '🎤 Não consegui entender o áudio. Tente digitar a mensagem.')
+        return
+      }
+
+      // Confirma o que foi entendido antes de processar
+      await sendMessage(phone, `🎤 Ouvi: _"${transcricao}"_\nProcessando...`)
+      text = transcricao
+    }
+
+    if (!text) return  // imagens, stickers, etc. — ignora silenciosamente
+
+    console.log(`[WHATSAPP] ${audioMsg ? '🎤 Áudio' : '💬 Texto'} de ${phone}: ${text.substring(0, 60)}`)
 
     // 3. Busca userId pelo número cadastrado
     const phoneResult = await query(
