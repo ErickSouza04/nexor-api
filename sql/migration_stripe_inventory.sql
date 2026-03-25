@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS user_phones (
 -- ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS whatsapp_sessions (
   id              UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
-  phone           TEXT      NOT NULL,
+  phone           TEXT      NOT NULL UNIQUE,
   user_id         UUID      REFERENCES usuarios(id) ON DELETE CASCADE,
   context         JSONB     DEFAULT '{}',
   last_intent     TEXT,

@@ -81,7 +81,7 @@ const autenticar = async (req, res, next) => {
 
     // Busca usuário atualizado do banco (pega plano/trial atual)
     const result = await query(
-      'SELECT id, plano, tipo_plano, trial_inicio, trial_dias, ativo FROM usuarios WHERE id = $1',
+      'SELECT id, plan, plano, tipo_plano, trial_inicio, trial_dias, ativo FROM usuarios WHERE id = $1',
       [decoded.userId]
     )
 
@@ -92,8 +92,9 @@ const autenticar = async (req, res, next) => {
     const usuario = result.rows[0]
     const statusPlano = calcularStatusPlano(usuario)
 
-    req.userId    = decoded.userId
-    req.userPlano = statusPlano.plano
+    req.userId        = decoded.userId
+    req.userPlan      = usuario.plan || 'base'
+    req.userPlano     = statusPlano.plano
     req.diasRestantes = statusPlano.diasRestantes
 
     next()

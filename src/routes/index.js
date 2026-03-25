@@ -9,6 +9,9 @@ const {
   validarMeta, validarProduto, validarUUID
 } = require('../middleware/validacao')
 
+const stockRoutes    = require('./stock')
+const whatsappRoutes = require('./whatsapp')
+
 const authCtrl    = require('../controllers/authController')
 const vendasCtrl  = require('../controllers/vendasController')
 const despesasCtrl= require('../controllers/despesasController')
@@ -72,5 +75,11 @@ router.post('/ia/chat',           ...privado, iaCtrl.chat)
 router.post('/ia/copiloto',       ...privado, iaCtrl.copiloto)
 router.post('/ia/previsao',       ...privado, iaCtrl.previsao)
 router.post('/ia/insight-diario', ...privado, iaCtrl.insightDiario)
+
+// Estoque (plano Plus)
+router.use('/stock', stockRoutes)
+
+// WhatsApp (plano Plus)
+router.use('/whatsapp', whatsappRoutes)
 
 module.exports = router
