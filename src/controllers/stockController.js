@@ -140,11 +140,8 @@ const registrarMovimentacao = async (req, res) => {
       return res.status(400).json({ sucesso: false, erro: 'quantity deve ser maior que zero' })
     }
 
-    const resultado = await transaction(async (client) => {
-      // Configura RLS para a transação
-      await client.query(`SET LOCAL app.current_user_id = '${userId}'`)
-
-      // Busca produto e verifica dono
+    const resultado = await transaction(userId, async (client) => {
+      // Busca produto e verifica dono (RLS já configurado pelo transaction())
       const produto = await client.query(
         'SELECT id, current_stock FROM products WHERE id = $1 AND user_id = $2',
         [product_id, userId]
