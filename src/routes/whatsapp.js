@@ -13,10 +13,10 @@ const whatsappCtrl   = require('../controllers/whatsappController')
 const protegido = [autenticar, exigirPlanoAtivo, checkPlan('plus')]
 
 // Webhook: sem JWT — validado internamente por token secreto (x-whatsapp-token)
-router.post('/webhook',        whatsappCtrl.webhook)
+router.post('/webhook',        whatsappCtrl.handleWebhook)
 
 // Rotas protegidas por plano Plus
-router.post('/register-phone', ...protegido, whatsappCtrl.vincularTelefone)
+router.post('/register-phone', ...protegido, whatsappCtrl.registerPhone)
 router.get('/status',          ...protegido, whatsappCtrl.verificarStatus)
 router.post('/send',           ...protegido, whatsappCtrl.enviarMensagem)
 
