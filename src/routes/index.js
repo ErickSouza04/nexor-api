@@ -9,6 +9,10 @@ const {
   validarMeta, validarProduto, validarUUID
 } = require('../middleware/validacao')
 
+const stockRoutes    = require('./stock')
+const whatsappRoutes = require('./whatsapp')
+const stripeRoutes   = require('./stripe')
+
 const authCtrl    = require('../controllers/authController')
 const vendasCtrl  = require('../controllers/vendasController')
 const despesasCtrl= require('../controllers/despesasController')
@@ -67,10 +71,22 @@ router.delete('/produtos/:id',      ...privado, validarUUID,    metasCtrl.deleta
 // Perfil
 router.put('/usuarios/perfil', autenticar, authCtrl.atualizarPerfil)
 
+// Usuário logado
+router.get('/users/me', autenticar, authCtrl.me)
+
 // Nexor IA
 router.post('/ia/chat',           ...privado, iaCtrl.chat)
 router.post('/ia/copiloto',       ...privado, iaCtrl.copiloto)
 router.post('/ia/previsao',       ...privado, iaCtrl.previsao)
 router.post('/ia/insight-diario', ...privado, iaCtrl.insightDiario)
+
+// Stripe (checkout + webhook)
+router.use('/stripe', stripeRoutes)
+
+// Estoque (plano Plus)
+router.use('/stock', stockRoutes)
+
+// WhatsApp (plano Plus)
+router.use('/whatsapp', whatsappRoutes)
 
 module.exports = router

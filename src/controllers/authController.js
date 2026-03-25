@@ -272,6 +272,44 @@ const recuperarSenha = async (req, res) => {
   }
 }
 
+// ── DADOS DO USUÁRIO LOGADO ──────────────────────────────
+const me = async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
+              tipo_negocio, faturamento_medio, criado_em
+       FROM usuarios WHERE id = $1`,
+      [req.userId]
+    )
+    if (!result.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })
+
+    const u = result.rows[0]
+    const status = calcularStatusPlano(u)
+
+    res.json({
+      sucesso: true,
+      usuario: {
+        id:                u.id,
+        nome:              u.nome,
+        email:             u.email,
+        plan:              u.plan || 'base',
+        plano:             status.plano,
+        tipo_plano:        status.tipo_plano,
+        rotulo:            status.rotulo,
+        preco:             status.preco,
+        periodo:           status.periodo,
+        diasRestantes:     status.diasRestantes,
+        tipo_negocio:      u.tipo_negocio,
+        faturamento_medio: u.faturamento_medio,
+        criado_em:         u.criado_em,
+      }
+    })
+  } catch (err) {
+    console.error('Erro no /users/me:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro interno do servidor' })
+  }
+}
+
 // ── STATUS DO PLANO ──────────────────────────────────────
 const statusPlano = async (req, res) => {
   try {
@@ -287,4 +325,4 @@ const statusPlano = async (req, res) => {
   }
 }
 
-module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano }
+module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me }
