@@ -30,6 +30,12 @@ const planoDoPrice = (priceId) => {
   return 'base'
 }
 
+// Determina o tipo_plano (período) a partir do objeto price do Stripe
+const periodoDoPrice = (price) => {
+  if (price?.recurring?.interval === 'year') return 'anual'
+  return 'mensal'
+}
+
 // ── CRIAR CHECKOUT SESSION ───────────────────────────────
 const createCheckoutSession = async (req, res) => {
   try {
@@ -141,7 +147,7 @@ const handleWebhook = async (req, res) => {
           console.warn('[STRIPE] checkout.session.completed sem userId no metadata')
           break
         }
-        await atualizarPlan(userId, plano, subId)
+        await atualizarPlan(userId, plano, subId, 'ativo', 'mensal')
         console.log(`[STRIPE] ✅ Plano ativado: user ${userId} → ${plano}`)
         break
       }
@@ -156,14 +162,15 @@ const handleWebhook = async (req, res) => {
           break
         }
 
-        const priceId = sub.items?.data[0]?.price?.id
-        const plano   = planoDoPrice(priceId)
+        const price   = sub.items?.data[0]?.price
+        const plano   = planoDoPrice(price?.id)
+        const periodo = periodoDoPrice(price)
 
         if (sub.status === 'active') {
-          await atualizarPlan(userId, plano, sub.id)
-          console.log(`[STRIPE] 🔄 Assinatura atualizada: user ${userId} → ${plano}`)
+          await atualizarPlan(userId, plano, sub.id, 'ativo', periodo)
+          console.log(`[STRIPE] 🔄 Assinatura atualizada: user ${userId} → ${plano} (${periodo})`)
         } else if (['past_due', 'unpaid', 'canceled'].includes(sub.status)) {
-          await atualizarPlan(userId, 'base', null)
+          await atualizarPlan(userId, 'base', null, 'cancelado', 'mensal')
           console.log(`[STRIPE] ⚠️ Acesso rebaixado (${sub.status}): user ${userId} → base`)
         }
         break
@@ -178,7 +185,7 @@ const handleWebhook = async (req, res) => {
           console.warn('[STRIPE] customer.subscription.deleted sem userId no metadata')
           break
         }
-        await atualizarPlan(userId, 'base', null)
+        await atualizarPlan(userId, 'base', null, 'cancelado', 'mensal')
         console.log(`[STRIPE] ❌ Assinatura cancelada: user ${userId} → base`)
         break
       }
@@ -195,16 +202,18 @@ const handleWebhook = async (req, res) => {
   }
 }
 
-// ── Helper: atualiza plan + stripe_subscription_id ───────
-async function atualizarPlan(userId, plano, subscriptionId) {
+// ── Helper: atualiza plan, plano, tipo_plano + stripe_subscription_id ──
+async function atualizarPlan(userId, planTier, subscriptionId, statusPlano = 'ativo', tipoPlanoPeriodo = 'mensal') {
   const resultado = await query(
     `UPDATE usuarios
      SET plan                   = $2,
+         plano                  = $4,
+         tipo_plano             = $5,
          stripe_subscription_id = COALESCE($3, stripe_subscription_id),
          atualizado_em          = NOW()
      WHERE id = $1
      RETURNING id`,
-    [userId, plano, subscriptionId || null]
+    [userId, planTier, subscriptionId || null, statusPlano, tipoPlanoPeriodo]
   )
   if (!resultado.rows.length) {
     console.warn(`[STRIPE] Usuário não encontrado pelo ID: ${userId}`)
