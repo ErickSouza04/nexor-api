@@ -120,7 +120,7 @@ const login = async (req, res) => {
     const { email, senha } = req.body
 
     const resultado = await query(
-      `SELECT id, nome, email, senha_hash, plano, tipo_plano, trial_inicio, trial_dias,
+      `SELECT id, nome, email, senha_hash, plano, plan, tipo_plano, trial_inicio, trial_dias,
               tipo_negocio, faturamento_medio, ativo
        FROM usuarios WHERE email = $1`,
       [email.toLowerCase().trim()]
@@ -162,6 +162,7 @@ const login = async (req, res) => {
         id:               usuario.id,
         nome:             usuario.nome,
         email:            usuario.email,
+        plan:             usuario.plan || 'base',
         plano:            statusPlano.plano,
         tipo_plano:       statusPlano.tipo_plano,
         rotulo:           statusPlano.rotulo,
