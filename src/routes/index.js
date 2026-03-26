@@ -64,9 +64,10 @@ router.get ('/metas',               ...privado,             metasCtrl.listar)
 router.post('/metas',               ...privado, validarMeta, metasCtrl.salvar)
 
 // Produtos
-router.get ('/produtos',            ...privado,                 metasCtrl.listarProdutos)
-router.post('/produtos',            ...privado, validarProduto,  metasCtrl.criarProduto)
-router.delete('/produtos/:id',      ...privado, validarUUID,    metasCtrl.deletarProduto)
+router.get   ('/produtos',        ...privado,                  metasCtrl.listarProdutos)
+router.post  ('/produtos',        ...privado, validarProduto,  metasCtrl.criarProduto)
+router.put   ('/produtos/:id',    ...privado, validarUUID, validarProduto, metasCtrl.atualizarProduto)
+router.delete('/produtos/:id',    ...privado, validarUUID,    metasCtrl.deletarProduto)
 
 // Perfil
 router.put('/usuarios/perfil', autenticar, authCtrl.atualizarPerfil)

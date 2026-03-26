@@ -10,12 +10,29 @@ const { queryWithUser, transaction } = require('../config/database')
 const criarProduto = async (req, res) => {
   try {
     const userId = req.userId
-    const { name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price } = req.body
+    const { name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price, produto_id } = req.body
+
+    let finalCostPrice = cost_price  != null ? parseFloat(cost_price)  : null
+    let finalSalePrice = sale_price  != null ? parseFloat(sale_price)  : null
+
+    // Se produto_id fornecido, busca precificação e auto-preenche preços
+    if (produto_id) {
+      const precificacao = await queryWithUser(userId,
+        'SELECT custo, embalagem, preco_sugerido FROM produtos WHERE id = $1 AND user_id = $2',
+        [produto_id, userId]
+      )
+      if (precificacao.rows.length === 0) {
+        return res.status(404).json({ sucesso: false, erro: 'Produto de precificação não encontrado' })
+      }
+      const p = precificacao.rows[0]
+      finalCostPrice = parseFloat(p.custo) + parseFloat(p.embalagem || 0)
+      finalSalePrice = parseFloat(p.preco_sugerido)
+    }
 
     const resultado = await queryWithUser(userId,
       `INSERT INTO products
-         (user_id, name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (user_id, name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price, produto_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         userId,
@@ -24,8 +41,9 @@ const criarProduto = async (req, res) => {
         unit        || 'unidade',
         parseFloat(current_stock    || 0),
         parseFloat(min_stock_alert  || 5),
-        cost_price  != null ? parseFloat(cost_price)  : null,
-        sale_price  != null ? parseFloat(sale_price)  : null,
+        finalCostPrice,
+        finalSalePrice,
+        produto_id  || null,
       ]
     )
 
@@ -83,7 +101,24 @@ const editarProduto = async (req, res) => {
   try {
     const userId = req.userId
     const { id }  = req.params
-    const { name, brand, unit, min_stock_alert, cost_price, sale_price } = req.body
+    const { name, brand, unit, min_stock_alert, cost_price, sale_price, produto_id } = req.body
+
+    let finalCostPrice = cost_price  != null ? parseFloat(cost_price)  : null
+    let finalSalePrice = sale_price  != null ? parseFloat(sale_price)  : null
+
+    // Se produto_id fornecido, sincroniza preços da precificação
+    if (produto_id) {
+      const precificacao = await queryWithUser(userId,
+        'SELECT custo, embalagem, preco_sugerido FROM produtos WHERE id = $1 AND user_id = $2',
+        [produto_id, userId]
+      )
+      if (precificacao.rows.length === 0) {
+        return res.status(404).json({ sucesso: false, erro: 'Produto de precificação não encontrado' })
+      }
+      const p = precificacao.rows[0]
+      finalCostPrice = parseFloat(p.custo) + parseFloat(p.embalagem || 0)
+      finalSalePrice = parseFloat(p.preco_sugerido)
+    }
 
     const resultado = await queryWithUser(userId,
       `UPDATE products
@@ -93,7 +128,8 @@ const editarProduto = async (req, res) => {
          unit            = COALESCE($5, unit),
          min_stock_alert = COALESCE($6, min_stock_alert),
          cost_price      = COALESCE($7, cost_price),
-         sale_price      = COALESCE($8, sale_price)
+         sale_price      = COALESCE($8, sale_price),
+         produto_id      = COALESCE($9, produto_id)
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
       [
@@ -103,8 +139,9 @@ const editarProduto = async (req, res) => {
         brand           || null,
         unit            || null,
         min_stock_alert != null ? parseFloat(min_stock_alert) : null,
-        cost_price      != null ? parseFloat(cost_price)      : null,
-        sale_price      != null ? parseFloat(sale_price)      : null,
+        finalCostPrice,
+        finalSalePrice,
+        produto_id      || null,
       ]
     )
 
