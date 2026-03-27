@@ -15,6 +15,17 @@ const PRECOS_PLANO = {
   anual:  { valor: 'R$ 247,90', periodo: 'ano' },
 }
 
+// ── Rótulos e preços por coluna `plan` (base/plus) ─────
+const ROTULOS_PLAN = {
+  base: 'Plano Base',
+  plus: 'Plano Plus',
+}
+
+const PRECOS_PLAN = {
+  base: { valor: 'R$ 37,90', periodo: 'mês' },
+  plus: { valor: 'R$ 67,90', periodo: 'mês' },
+}
+
 const CTA_PLANOS = {
   link_mensal: 'https://buy.stripe.com/6oU6oH5ZNcOH7AJ9qR6Na00',
   link_anual:  'https://buy.stripe.com/cNi9AT1JxcOH8ENcD36Na01',
@@ -23,13 +34,16 @@ const CTA_PLANOS = {
 // ── Calcula status do plano em tempo real ──────────────
 const calcularStatusPlano = (usuario) => {
   const tipo = usuario.tipo_plano || 'trial'
+  const plan = usuario.plan || 'base'
 
   if (usuario.plano === 'ativo') {
-    const preco = PRECOS_PLANO[tipo] || null
+    // Usa plan (base/plus) para rótulo e preço; fallback para tipo_plano
+    const preco = PRECOS_PLAN[plan] || PRECOS_PLANO[tipo] || null
     return {
       plano:         'ativo',
       tipo_plano:    tipo,
-      rotulo:        ROTULOS_PLANO[tipo] || 'Plano Ativo',
+      plan:          plan,
+      rotulo:        ROTULOS_PLAN[plan] || ROTULOS_PLANO[tipo] || 'Plano Ativo',
       preco:         preco?.valor || null,
       periodo:       preco?.periodo || null,
       diasRestantes: null,

@@ -10,7 +10,16 @@ const { queryWithUser, transaction } = require('../config/database')
 const criarProduto = async (req, res) => {
   try {
     const userId = req.userId
-    const { name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price } = req.body
+    const b = req.body
+
+    // Aceita nomes em inglês (padrão API) ou português (frontend)
+    const name             = b.name            ?? b.nome
+    const brand            = b.brand           ?? b.marca
+    const unit             = b.unit            ?? b.unidade
+    const current_stock    = b.current_stock   ?? b.qtd_inicial    ?? b.quantidade_inicial ?? b.estoque_atual
+    const min_stock_alert  = b.min_stock_alert ?? b.estoque_minimo ?? b.min_estoque
+    const cost_price       = b.cost_price      ?? b.preco_custo
+    const sale_price       = b.sale_price      ?? b.preco_venda
 
     const resultado = await queryWithUser(userId,
       `INSERT INTO products
@@ -83,7 +92,15 @@ const editarProduto = async (req, res) => {
   try {
     const userId = req.userId
     const { id }  = req.params
-    const { name, brand, unit, min_stock_alert, cost_price, sale_price } = req.body
+    const b = req.body
+
+    // Aceita nomes em inglês (padrão API) ou português (frontend)
+    const name            = b.name            ?? b.nome
+    const brand           = b.brand           ?? b.marca
+    const unit            = b.unit            ?? b.unidade
+    const min_stock_alert = b.min_stock_alert ?? b.estoque_minimo ?? b.min_estoque
+    const cost_price      = b.cost_price      ?? b.preco_custo
+    const sale_price      = b.sale_price      ?? b.preco_venda
 
     const resultado = await queryWithUser(userId,
       `UPDATE products
