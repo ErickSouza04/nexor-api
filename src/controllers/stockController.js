@@ -38,10 +38,20 @@ const criarProduto = async (req, res) => {
       ]
     )
 
+    // Busca lista atualizada para o frontend poder renderizar sem um GET extra
+    const lista = await queryWithUser(userId,
+      `SELECT id, name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price, created_at
+       FROM products
+       WHERE user_id = $1
+       ORDER BY name ASC`,
+      [userId]
+    )
+
     res.status(201).json({
-      sucesso:  true,
-      mensagem: 'Produto criado com sucesso!',
-      dados:    resultado.rows[0]
+      sucesso:   true,
+      mensagem:  'Produto criado com sucesso!',
+      dados:     resultado.rows[0],
+      produtos:  lista.rows
     })
   } catch (err) {
     console.error('Erro ao criar produto:', err)

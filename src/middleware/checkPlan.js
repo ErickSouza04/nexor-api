@@ -8,6 +8,9 @@
 const HIERARQUIA = ['base', 'plus']
 
 const checkPlan = (planoRequerido) => (req, res, next) => {
+  // Usuários em trial têm acesso a todas as funcionalidades durante o período gratuito
+  if (req.userPlano === 'trial') return next()
+
   const nivelUsuario   = HIERARQUIA.indexOf(req.userPlan || 'base')
   const nivelRequerido = HIERARQUIA.indexOf(planoRequerido)
 
