@@ -58,7 +58,7 @@ const cadastrar = async (req, res) => {
       const novoUsuario = await client.query(
         `INSERT INTO usuarios (nome, email, senha_hash, tipo_negocio, faturamento_medio, plano, trial_inicio, trial_dias)
          VALUES ($1, $2, $3, $4, $5, 'trial', NOW(), 7)
-         RETURNING id, nome, email, plano, tipo_plano, trial_inicio, trial_dias,
+         RETURNING id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
                    tipo_negocio, faturamento_medio, criado_em`,
         [nome.trim(), emailNorm, senhaHash, tipo_negocio || null, faturamento_medio || null]
       )
@@ -186,7 +186,7 @@ const refreshToken = async (req, res) => {
     if (!refresh_token) return res.status(400).json({ sucesso: false, erro: 'Refresh token não fornecido' })
 
     const resultado = await query(
-      `SELECT rt.user_id, u.plano, u.trial_inicio, u.trial_dias FROM refresh_tokens rt
+      `SELECT rt.user_id, u.plan, u.plano, u.tipo_plano, u.trial_inicio, u.trial_dias FROM refresh_tokens rt
        JOIN usuarios u ON rt.user_id = u.id
        WHERE rt.token = $1 AND rt.expira_em > NOW()`,
       [refresh_token]
@@ -226,7 +226,7 @@ const atualizarPerfil = async (req, res) => {
     const resultado = await query(
       `UPDATE usuarios SET nome=$1, tipo_negocio=$2, faturamento_medio=$3, atualizado_em=NOW()
        WHERE id=$4
-       RETURNING id, nome, email, tipo_negocio, faturamento_medio,
+       RETURNING id, nome, email, plan, tipo_negocio, faturamento_medio,
                  plano, tipo_plano, trial_inicio, trial_dias`,
       [nome?.trim(), tipo_negocio, faturamento_medio, req.userId]
     )
@@ -242,6 +242,7 @@ const atualizarPerfil = async (req, res) => {
         id:               u.id,
         nome:             u.nome,
         email:            u.email,
+        plan:             u.plan || 'base',
         tipo_negocio:     u.tipo_negocio,
         faturamento_medio: u.faturamento_medio,
         plano:            status.plano,
@@ -315,7 +316,7 @@ const me = async (req, res) => {
 const statusPlano = async (req, res) => {
   try {
     const result = await query(
-      'SELECT plano, tipo_plano, trial_inicio, trial_dias FROM usuarios WHERE id = $1',
+      'SELECT plan, plano, tipo_plano, trial_inicio, trial_dias FROM usuarios WHERE id = $1',
       [req.userId]
     )
     if (!result.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })
