@@ -64,11 +64,18 @@ const queryWithUser = async (userId, text, params) => {
   }
   const client = await pool.connect()
   try {
-    // Define o user_id na sessão — ativa as políticas RLS
+    // BEGIN garante que SET LOCAL persista para a query seguinte.
+    // Sem transação explícita cada client.query() é uma transação
+    // implícita separada e o SET LOCAL expira antes da data query.
     // UUID já validado acima, interpolação segura aqui
+    await client.query('BEGIN')
     await client.query(`SET LOCAL app.current_user_id = '${userId}'`)
     const result = await client.query(text, params)
+    await client.query('COMMIT')
     return result
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
   } finally {
     client.release()  // SEMPRE devolve a conexão ao pool
   }
