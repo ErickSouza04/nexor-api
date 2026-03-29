@@ -132,6 +132,18 @@ const validarProduto = [
   checarErros
 ]
 
+// ── PERFIL ───────────────────────────────────────────────
+const validarPerfil = [
+  body('nome')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 255 }).withMessage('Nome deve ter entre 2 e 255 caracteres'),
+  body('pro_labore')
+    .optional({ nullable: true })
+    .isFloat({ min: 0 }).withMessage('Pró-labore inválido'),
+  checarErros
+]
+
 // ── UUID em parâmetros de rota ────────────────────────────
 const validarUUID = [
   param('id').isUUID().withMessage('ID inválido'),
@@ -142,5 +154,5 @@ module.exports = {
   validarCadastro, validarLogin,
   validarVenda, validarDespesa,
   validarMeta, validarProduto,
-  validarUUID
+  validarPerfil, validarUUID
 }
