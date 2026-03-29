@@ -129,16 +129,20 @@ ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Políticas: cada usuário só acessa seus próprios registros
 CREATE POLICY isolamento_vendas   ON vendas
-  USING (user_id = current_setting('app.current_user_id', true)::uuid);
+  USING     (user_id = current_setting('app.current_user_id', true)::uuid)
+  WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY isolamento_despesas ON despesas
-  USING (user_id = current_setting('app.current_user_id', true)::uuid);
+  USING     (user_id = current_setting('app.current_user_id', true)::uuid)
+  WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY isolamento_metas    ON metas
-  USING (user_id = current_setting('app.current_user_id', true)::uuid);
+  USING     (user_id = current_setting('app.current_user_id', true)::uuid)
+  WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY isolamento_produtos ON produtos
-  USING (user_id = current_setting('app.current_user_id', true)::uuid);
+  USING     (user_id = current_setting('app.current_user_id', true)::uuid)
+  WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 CREATE POLICY isolamento_tokens   ON refresh_tokens
   USING (user_id = current_setting('app.current_user_id', true)::uuid);

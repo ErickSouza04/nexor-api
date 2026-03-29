@@ -92,13 +92,13 @@ const validarMeta = [
     .notEmpty().withMessage('Valor da meta é obrigatório')
     .isFloat({ min: 1 }).withMessage('Meta deve ser maior que zero'),
   body('mes')
-    .notEmpty()
+    .notEmpty().withMessage('Mês é obrigatório')
     .isInt({ min: 1, max: 12 }).withMessage('Mês inválido'),
   body('ano')
-    .notEmpty()
+    .notEmpty().withMessage('Ano é obrigatório')
     .isInt({ min: 2024 }).withMessage('Ano inválido'),
   body('pro_labore')
-    .optional()
+    .optional({ nullable: true })
     .isFloat({ min: 0 }).withMessage('Pró-labore inválido'),
   checarErros
 ]
