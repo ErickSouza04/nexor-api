@@ -222,13 +222,16 @@ const logout = async (req, res) => {
 // ── ATUALIZAR PERFIL ─────────────────────────────────────
 const atualizarPerfil = async (req, res) => {
   try {
-    const { nome, tipo_negocio, faturamento_medio } = req.body
+    const { nome, tipo_negocio, faturamento_medio, pro_labore } = req.body
     const resultado = await query(
-      `UPDATE usuarios SET nome=$1, tipo_negocio=$2, faturamento_medio=$3, atualizado_em=NOW()
-       WHERE id=$4
-       RETURNING id, nome, email, plan, tipo_negocio, faturamento_medio,
-                 plano, tipo_plano, trial_inicio, trial_dias`,
-      [nome?.trim(), tipo_negocio, faturamento_medio, req.userId]
+      `UPDATE usuarios
+          SET nome=$1, tipo_negocio=$2, faturamento_medio=$3,
+              pro_labore=COALESCE($5, pro_labore), atualizado_em=NOW()
+        WHERE id=$4
+        RETURNING id, nome, email, plan, tipo_negocio, faturamento_medio,
+                  pro_labore, plano, tipo_plano, trial_inicio, trial_dias`,
+      [nome?.trim(), tipo_negocio, faturamento_medio, req.userId,
+       pro_labore != null ? parseFloat(pro_labore) : null]
     )
     if (!resultado.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })
 
@@ -239,18 +242,19 @@ const atualizarPerfil = async (req, res) => {
       sucesso: true,
       mensagem: 'Perfil atualizado!',
       usuario: {
-        id:               u.id,
-        nome:             u.nome,
-        email:            u.email,
-        plan:             u.plan || 'base',
-        tipo_negocio:     u.tipo_negocio,
+        id:                u.id,
+        nome:              u.nome,
+        email:             u.email,
+        plan:              u.plan || 'base',
+        tipo_negocio:      u.tipo_negocio,
         faturamento_medio: u.faturamento_medio,
-        plano:            status.plano,
-        tipo_plano:       status.tipo_plano,
-        rotulo:           status.rotulo,
-        preco:            status.preco,
-        periodo:          status.periodo,
-        diasRestantes:    status.diasRestantes,
+        pro_labore:        u.pro_labore,
+        plano:             status.plano,
+        tipo_plano:        status.tipo_plano,
+        rotulo:            status.rotulo,
+        preco:             status.preco,
+        periodo:           status.periodo,
+        diasRestantes:     status.diasRestantes,
       }
     })
   } catch (err) {
