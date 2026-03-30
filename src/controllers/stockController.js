@@ -41,7 +41,9 @@ const criarProduto = async (req, res) => {
     res.status(201).json({
       sucesso:  true,
       mensagem: 'Produto criado com sucesso!',
-      dados:    resultado.rows[0]
+      dados:    resultado.rows[0],
+      produto:  resultado.rows[0],  // alias para compatibilidade com o frontend
+      product:  resultado.rows[0],  // alias em inglês
     })
   } catch (err) {
     console.error('Erro ao criar produto:', err)
