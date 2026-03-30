@@ -216,9 +216,12 @@ const registrarMovimentacao = async (req, res) => {
     })
 
     res.status(201).json({
-      sucesso:  true,
-      mensagem: 'Movimentação registrada com sucesso!',
-      dados:    resultado
+      ok:         true,
+      sucesso:    true,
+      mensagem:   'Movimentação registrada com sucesso!',
+      product_id: resultado.produto.id,
+      new_stock:  parseFloat(resultado.produto.current_stock),
+      dados:      resultado
     })
   } catch (err) {
     console.error('Erro ao registrar movimentação:', err)
