@@ -26,6 +26,7 @@ router.put('/products/:id',  ...protegido, stockCtrl.editarProduto)
 
 // Movimentações
 router.post('/movement',     ...protegido, stockCtrl.registrarMovimentacao)
+router.post('/movements',    ...protegido, stockCtrl.registrarMovimentacao)
 router.get('/movements',     ...protegido, stockCtrl.listarMovimentacoes)
 
 // Alertas
