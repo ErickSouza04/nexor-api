@@ -53,6 +53,11 @@ if (missingEnvs.length > 0) {
 const app  = express()
 const PORT = process.env.PORT || 3000
 
+// Railway (e qualquer reverse proxy) adiciona X-Forwarded-For.
+// Sem isso o express-rate-limit lança ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// e não consegue identificar o IP real do cliente.
+app.set('trust proxy', 1)
+
 // ── HEALTH CHECK — antes de tudo (Railway precisa disso) ──
 app.get('/health', async (req, res) => {
   try {
