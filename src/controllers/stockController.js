@@ -78,8 +78,10 @@ const listarProdutos = async (req, res) => {
     )
 
     res.json({
-      sucesso: true,
-      dados:   resultado.rows,
+      sucesso:  true,
+      dados:    resultado.rows,
+      produtos: resultado.rows,  // alias PT
+      products: resultado.rows,  // alias EN
       paginacao: {
         total:   parseInt(total.rows[0].count),
         pagina,
