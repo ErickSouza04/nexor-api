@@ -229,12 +229,16 @@ const atualizarPerfil = async (req, res) => {
 
     const resultado = await query(
       `UPDATE usuarios
-          SET nome=$1, tipo_negocio=$2, faturamento_medio=$3,
-              pro_labore=COALESCE($5, pro_labore), atualizado_em=NOW()
+          SET nome             = COALESCE($1, nome),
+              tipo_negocio     = COALESCE($2, tipo_negocio),
+              faturamento_medio= COALESCE($3, faturamento_medio),
+              pro_labore       = COALESCE($5, pro_labore),
+              atualizado_em    = NOW()
         WHERE id=$4
         RETURNING id, nome, email, plan, tipo_negocio, faturamento_medio,
                   pro_labore, plano, tipo_plano, trial_inicio, trial_dias`,
-      [nome?.trim(), tipo_negocio, faturamento_medio, req.userId, proLabore]
+      [nome?.trim() || null, tipo_negocio || null, faturamento_medio || null,
+       req.userId, proLabore]
     )
     if (!resultado.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })
 
