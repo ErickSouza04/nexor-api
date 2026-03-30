@@ -222,7 +222,11 @@ const logout = async (req, res) => {
 // ── ATUALIZAR PERFIL ─────────────────────────────────────
 const atualizarPerfil = async (req, res) => {
   try {
-    const { nome, tipo_negocio, faturamento_medio, pro_labore } = req.body
+    const { nome, tipo_negocio, faturamento_medio } = req.body
+    // aceita pro_labore ou retirada (nome usado pelo app móvel)
+    const proLaboreRaw = req.body.pro_labore ?? req.body.retirada ?? null
+    const proLabore = proLaboreRaw != null ? parseFloat(proLaboreRaw) : null
+
     const resultado = await query(
       `UPDATE usuarios
           SET nome=$1, tipo_negocio=$2, faturamento_medio=$3,
@@ -230,8 +234,7 @@ const atualizarPerfil = async (req, res) => {
         WHERE id=$4
         RETURNING id, nome, email, plan, tipo_negocio, faturamento_medio,
                   pro_labore, plano, tipo_plano, trial_inicio, trial_dias`,
-      [nome?.trim(), tipo_negocio, faturamento_medio, req.userId,
-       pro_labore != null ? parseFloat(pro_labore) : null]
+      [nome?.trim(), tipo_negocio, faturamento_medio, req.userId, proLabore]
     )
     if (!resultado.rows.length) return res.status(404).json({ sucesso: false, erro: 'Usuário não encontrado' })
 

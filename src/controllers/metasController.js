@@ -18,21 +18,27 @@ const listar = async (req, res) => {
 const salvar = async (req, res) => {
   try {
     const userId = req.userId
-    const { valor_meta, mes, ano, pro_labore } = req.body
+    const { valor_meta, pro_labore } = req.body
 
-    // UPSERT — cria ou atualiza a meta do mês
+    // mes e ano são opcionais — default para o mês/ano atual se não enviados
+    const now = new Date()
+    const mes = req.body.mes != null ? parseInt(req.body.mes) : now.getMonth() + 1
+    const ano = req.body.ano != null ? parseInt(req.body.ano) : now.getFullYear()
+
+    console.log('[metas/salvar] params:', { valor_meta, mes, ano, pro_labore, userId })
+
     const resultado = await queryWithUser(userId,
       `INSERT INTO metas (user_id, valor_meta, mes, ano, pro_labore)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id, mes, ano)
-       DO UPDATE SET valor_meta = $2, pro_labore = $5
+       DO UPDATE SET valor_meta = EXCLUDED.valor_meta, pro_labore = EXCLUDED.pro_labore
        RETURNING *`,
-      [userId, parseFloat(valor_meta), parseInt(mes), parseInt(ano), parseFloat(pro_labore || 0)]
+      [userId, parseFloat(valor_meta), mes, ano, parseFloat(pro_labore || 0)]
     )
 
     res.json({ sucesso: true, mensagem: 'Meta salva com sucesso!', dados: resultado.rows[0] })
   } catch (err) {
-    console.error('Erro ao salvar meta:', err)
+    console.error('[metas/salvar] erro:', err.message, err.code, err.detail)
     res.status(500).json({ sucesso: false, erro: 'Erro ao salvar meta' })
   }
 }
