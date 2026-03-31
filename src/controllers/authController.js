@@ -290,7 +290,8 @@ const me = async (req, res) => {
   try {
     const result = await query(
       `SELECT id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
-              tipo_negocio, faturamento_medio, criado_em
+              tipo_negocio, faturamento_medio, criado_em,
+              meta_lucro AS meta_valor, pro_labore AS prolabore_valor, prolabore_freq
        FROM usuarios WHERE id = $1`,
       [req.userId]
     )
@@ -315,6 +316,9 @@ const me = async (req, res) => {
         tipo_negocio:      u.tipo_negocio,
         faturamento_medio: u.faturamento_medio,
         criado_em:         u.criado_em,
+        meta_valor:        u.meta_valor,
+        prolabore_valor:   u.prolabore_valor,
+        prolabore_freq:    u.prolabore_freq,
       }
     })
   } catch (err) {

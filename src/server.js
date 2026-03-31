@@ -34,6 +34,11 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE
     `)
     await client.query(`UPDATE usuarios SET ativo = TRUE WHERE ativo IS NULL`)
+    // Coluna prolabore_freq (migration_prolabore_freq)
+    await client.query(`
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS prolabore_freq VARCHAR(20) DEFAULT 'mensal'
+    `)
     console.log('✅ Migrações aplicadas com sucesso.')
   } catch (err) {
     console.error('⚠️  Erro nas migrações (não crítico):', err.message)
