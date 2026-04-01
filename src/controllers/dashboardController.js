@@ -33,6 +33,12 @@ const resumoCompleto = async (req, res) => {
       [userId, mes, ano]
     )
 
+    // Pró-labore padrão do usuário (fallback quando não há meta no mês)
+    const usuarioPL = await queryWithUser(userId,
+      `SELECT pro_labore FROM usuarios WHERE id = $1`,
+      [userId]
+    )
+
     // Dados do mês anterior (para comparação)
     const mesAnterior = mes === 1 ? 12 : mes - 1
     const anoAnterior = mes === 1 ? ano - 1 : ano
@@ -63,7 +69,8 @@ const resumoCompleto = async (req, res) => {
     const varDesp  = despAnt > 0 ? ((totalDespesas - despAnt) / despAnt) * 100 : 0
 
     const metaValor    = meta.rows[0]?.valor_meta || 0
-    const proLabore    = meta.rows[0]?.pro_labore || 0
+    // Usa pro_labore da meta do mês; se não houver meta, usa o valor padrão do perfil do usuário
+    const proLabore    = meta.rows[0]?.pro_labore ?? usuarioPL.rows[0]?.pro_labore ?? 0
     const progressoMeta = metaValor > 0 ? Math.min((lucro / metaValor) * 100, 100) : 0
 
     res.json({

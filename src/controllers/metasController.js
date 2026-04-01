@@ -25,8 +25,6 @@ const salvar = async (req, res) => {
     const mes = req.body.mes != null ? parseInt(req.body.mes) : now.getMonth() + 1
     const ano = req.body.ano != null ? parseInt(req.body.ano) : now.getFullYear()
 
-    console.log('[metas/salvar] params:', { valor_meta, mes, ano, pro_labore, userId })
-
     const resultado = await queryWithUser(userId,
       `INSERT INTO metas (user_id, valor_meta, mes, ano, pro_labore)
        VALUES ($1, $2, $3, $4, $5)
@@ -47,12 +45,11 @@ const salvar = async (req, res) => {
 // ─────────────────────────────────────────────────────────
 
 // src/controllers/produtosController.js — exportado junto por simplicidade
-const db = require('../config/database')
 
 const listarProdutos = async (req, res) => {
   try {
     const userId = req.userId
-    const resultado = await db.queryWithUser(userId,
+    const resultado = await queryWithUser(userId,
       `SELECT * FROM produtos WHERE user_id = $1 ORDER BY criado_em DESC`,
       [userId]
     )
@@ -73,7 +70,7 @@ const criarProduto = async (req, res) => {
     const margem      = parseFloat(margem_desejada) / 100
     const precoSugerido = custoTotal / (1 - margem - taxa)
 
-    const resultado = await db.queryWithUser(userId,
+    const resultado = await queryWithUser(userId,
       `INSERT INTO produtos (user_id, nome, custo, embalagem, taxa_percentual, margem_desejada, preco_sugerido)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [userId, nome.trim(), parseFloat(custo), parseFloat(embalagem || 0),
@@ -92,7 +89,7 @@ const deletarProduto = async (req, res) => {
   try {
     const userId = req.userId
     const { id } = req.params
-    const resultado = await db.queryWithUser(userId,
+    const resultado = await queryWithUser(userId,
       'DELETE FROM produtos WHERE id = $1 AND user_id = $2 RETURNING id',
       [id, userId]
     )
