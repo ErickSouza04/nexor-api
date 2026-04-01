@@ -290,7 +290,7 @@ const me = async (req, res) => {
   try {
     const result = await query(
       `SELECT id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
-              tipo_negocio, faturamento_medio, criado_em
+              tipo_negocio, faturamento_medio, pro_labore, criado_em
        FROM usuarios WHERE id = $1`,
       [req.userId]
     )
@@ -314,6 +314,7 @@ const me = async (req, res) => {
         diasRestantes:     status.diasRestantes,
         tipo_negocio:      u.tipo_negocio,
         faturamento_medio: u.faturamento_medio,
+        pro_labore:        u.pro_labore,
         criado_em:         u.criado_em,
       }
     })

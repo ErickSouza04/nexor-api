@@ -12,8 +12,6 @@ const criarProduto = async (req, res) => {
     const userId = req.userId
     const b = req.body
 
-    console.log('[stock/criarProduto] body recebido:', JSON.stringify(b))
-
     // Aceita nomes em inglês (padrão API) ou português (frontend)
     const name             = b.name            ?? b.nome            ?? b.produto ?? b.product
     const brand            = b.brand           ?? b.marca
@@ -22,8 +20,6 @@ const criarProduto = async (req, res) => {
     const min_stock_alert  = b.min_stock_alert ?? b.estoque_minimo ?? b.min_estoque
     const cost_price       = b.cost_price      ?? b.preco_custo    ?? b.custo
     const sale_price       = b.sale_price      ?? b.preco_venda    ?? b.venda
-
-    console.log('[stock/criarProduto] campos mapeados:', { name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price })
 
     const resultado = await queryWithUser(userId,
       `INSERT INTO products
@@ -51,7 +47,7 @@ const criarProduto = async (req, res) => {
     })
   } catch (err) {
     console.error('[stock/criarProduto] erro:', err.message, '| code:', err.code)
-    res.status(500).json({ sucesso: false, erro: 'Erro ao criar produto', detalhe: err.message })
+    res.status(500).json({ sucesso: false, erro: 'Erro ao criar produto' })
   }
 }
 

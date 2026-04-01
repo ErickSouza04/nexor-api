@@ -63,7 +63,11 @@ const resumoCompleto = async (req, res) => {
     const varDesp  = despAnt > 0 ? ((totalDespesas - despAnt) / despAnt) * 100 : 0
 
     const metaValor    = meta.rows[0]?.valor_meta || 0
-    const proLabore    = meta.rows[0]?.pro_labore || 0
+    const usuarioPL    = await queryWithUser(userId,
+      'SELECT pro_labore FROM usuarios WHERE id = $1',
+      [userId]
+    )
+    const proLabore    = meta.rows[0]?.pro_labore ?? usuarioPL.rows[0]?.pro_labore ?? 0
     const progressoMeta = metaValor > 0 ? Math.min((lucro / metaValor) * 100, 100) : 0
 
     res.json({
