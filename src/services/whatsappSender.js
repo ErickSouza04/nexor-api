@@ -1,10 +1,9 @@
 // src/services/whatsappSender.js
 // ─────────────────────────────────────────────────────────
-// Envia mensagens via Evolution API
+// Envia mensagens via Z-API
 // Variáveis necessárias:
-//   EVOLUTION_API_URL   — URL base da instância (ex: https://api.evolution.io)
-//   EVOLUTION_API_KEY   — chave de autenticação
-//   EVOLUTION_INSTANCE  — nome da instância (ex: nexor)
+//   ZAPI_INSTANCE_ID — ID da instância Z-API
+//   ZAPI_TOKEN       — token de autenticação Z-API
 // ─────────────────────────────────────────────────────────
 
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
@@ -13,30 +12,31 @@ const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...ar
 // phone: string com DDI+DDD+número (ex: 5511999999999)
 // message: texto a enviar
 async function sendMessage(phone, message) {
-  const { EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE } = process.env
+  const { ZAPI_INSTANCE_ID, ZAPI_TOKEN } = process.env
 
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
-    console.warn('[WHATSAPP] Evolution API não configurada — mensagem não enviada:', message)
+  if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN) {
+    console.warn('[WHATSAPP] Z-API não configurada — mensagem não enviada:', message)
     return null
   }
 
-  const url = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`
+  const normalizedPhone = phone.startsWith('55') ? phone : `55${phone}`
+
+  const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`
 
   const response = await fetch(url, {
     method:  'POST',
     headers: {
       'Content-Type': 'application/json',
-      'apikey':       EVOLUTION_API_KEY,
     },
     body: JSON.stringify({
-      number:      phone,
-      textMessage: { text: message },
+      phone:   normalizedPhone,
+      message: message,
     }),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Evolution API ${response.status}: ${errorText}`)
+    throw new Error(`Z-API ${response.status}: ${errorText}`)
   }
 
   return response.json()
