@@ -1,32 +1,24 @@
 // src/services/whatsappSender.js
 // ─────────────────────────────────────────────────────────
 // Envia mensagens via Z-API
-// Variáveis necessárias:
-//   ZAPI_INSTANCE_ID — ID da instância Z-API
-//   ZAPI_TOKEN       — token de autenticação Z-API
 // ─────────────────────────────────────────────────────────
 
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
+
+const ZAPI_URL = 'https://api.z-api.io/instances/3F107A9ADBC541BEC6E47697CBA61602/token/E464A03380C4A24691DD81EE/send-text'
+const ZAPI_CLIENT_TOKEN = 'D1553BE7863E64461519B5DA'
 
 // Envia mensagem de texto para um número WhatsApp
 // phone: string com DDI+DDD+número (ex: 5511999999999)
 // message: texto a enviar
 async function sendMessage(phone, message) {
-  const { ZAPI_INSTANCE_ID, ZAPI_TOKEN } = process.env
-
-  if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN) {
-    console.warn('[WHATSAPP] Z-API não configurada — mensagem não enviada:', message)
-    return null
-  }
-
   const normalizedPhone = phone.startsWith('55') ? phone : `55${phone}`
 
-  const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`
-
-  const response = await fetch(url, {
+  const response = await fetch(ZAPI_URL, {
     method:  'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Client-Token':  ZAPI_CLIENT_TOKEN,
     },
     body: JSON.stringify({
       phone:   normalizedPhone,
