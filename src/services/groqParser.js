@@ -38,6 +38,22 @@ Despesa:
   "valor": número
 }
 
+Entrada de estoque:
+{
+  "tipo": "estoque_entrada",
+  "produto": "nome",
+  "quantidade": número,
+  "valor": número (opcional)
+}
+
+Saída de estoque:
+{
+  "tipo": "estoque_saida",
+  "produto": "nome",
+  "quantidade": número,
+  "valor": número (opcional)
+}
+
 Consulta estoque:
 {
   "tipo": "consulta_estoque",
@@ -60,6 +76,21 @@ Regras:
 - Nunca retornar texto fora do JSON se for comando
 - Se não for comando, responder normalmente
 `
+
+Exemplos:
+
+"Comprei 5kg de farinha por 25 reais"
+→ estoque_entrada
+
+"Chegou 10 unidades de salgados"
+→ estoque_entrada
+
+"Usei 2kg de farinha"
+→ estoque_saida
+
+"Retirei 3 produtos do estoque"
+→ estoque_saida
+
 // ── Extrai o primeiro JSON válido de uma string ──────────
 function extrairJSON(raw) {
   const clean = raw.replace(/```json|```/g, '').trim()
