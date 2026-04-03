@@ -7,10 +7,11 @@
 //   1. Valida token secreto
 //   2. Extrai phone + text do payload Evolution API
 //   3. Busca userId em user_phones
-//   4. Verifica plano 'plus'
-//   5. Chama groqParser.parseMessage()
-//   6. Roteia pelo intent → executa operação no banco
-//   7. Responde via whatsappSender.sendMessage()
+//   4. ONBOARDING (ANTES DE TUDO)
+//   5. Verifica plano 'plus'
+//   6. Chama groqParser.parseMessage()
+//   7. Roteia pelo intent → executa operação no banco
+//   8. Responde via whatsappSender.sendMessage()
 // ─────────────────────────────────────────────────────────
 const { query, queryWithUser, transaction } = require('../config/database')
 const { parseMessage }     = require('../services/groqParser')
@@ -358,8 +359,79 @@ const handleWebhook = async (req, res) => {
       return
     }
     const userId = phoneResult.rows[0].user_id
+    
+    // ─────────────────────────────────────────
+// 4. ONBOARDING NEXOR
+// ─────────────────────────────────────────
 
-    // 4. Verifica plano Plus
+const userInfo = await query(
+  'SELECT name, onboarding_step FROM usuarios WHERE id = $1',
+  [userId]
+)
+
+const user = userInfo.rows[0]
+let nome = user?.name || null
+let step = user?.onboarding_step || null
+
+// 🟢 INICIAR ONBOARDING
+if (!step) {
+  await query(
+    'UPDATE usuarios SET onboarding_step = $1 WHERE id = $2',
+    ['aguardando_nome', userId]
+  )
+
+  await sendMessage(phone,
+`👋 Olá! Eu sou o *Nexor*.
+
+Vou te ajudar a controlar suas vendas, despesas e estoque direto no WhatsApp 💰📦
+
+Antes de começar, como posso te chamar?`)
+
+  return
+}
+
+// 🟢 CAPTURAR NOME
+if (step === 'aguardando_nome') {
+  const texto = text.trim()
+
+  if (texto.split(' ').length > 3) {
+    await sendMessage(phone, '👋 Me diga apenas seu nome 🙂')
+    return
+  }
+
+  if (/\d/.test(texto)) {
+    await sendMessage(phone, '👋 O nome não deve conter números 🙂')
+    return
+  }
+
+  const nomeDetectado =
+    texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase()
+
+  await query(
+    'UPDATE usuarios SET name = $1, onboarding_step = $2 WHERE id = $3',
+    [nomeDetectado, 'finalizado', userId]
+  )
+
+  await sendMessage(phone,
+`Prazer, ${nomeDetectado}! 🚀
+
+Agora você pode me mandar mensagens como:
+
+• Vendi 2 produtos por 50  
+• Paguei 30 de embalagem  
+• Comprei 5kg de farinha  
+• Quanto tenho de estoque?
+
+Bora organizar seu negócio 💰`)
+
+  return
+}
+
+// ─────────────────────────────────────────
+// FIM ONBOARDING
+// ─────────────────────────────────────────
+
+    // 5. Verifica plano Plus
     const userResult = await query(
       'SELECT plan FROM usuarios WHERE id = $1 AND ativo = TRUE',
       [userId]
@@ -369,7 +441,7 @@ const handleWebhook = async (req, res) => {
       return
     }
 
-    // 5. Parseia a mensagem com Groq
+    // 6. Parseia a mensagem com Groq
     let parsed
     try {
       parsed = await parseMessage(text)
@@ -387,7 +459,7 @@ const handleWebhook = async (req, res) => {
     
     console.log(`[WHATSAPP] Tipo: ${parsed.tipo} | user: ${userId}`)
 
-    // 6. Roteia pelo intent
+    // 7. Roteia pelo intent
     let resposta
 try {
   console.log('[IA OUTPUT]:', parsed)
@@ -439,7 +511,7 @@ try {
   resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
 }
 
-    // 7. Envia resposta
+    // 8. Envia resposta
     await sendMessage(phone, resposta)
 
   } catch (err) {
