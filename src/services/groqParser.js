@@ -96,7 +96,9 @@ async function groqRequest(messages) {
 
 // ── PARSE ─────────────────────────────────────────────────
 // text: string com a mensagem do usuário
-// Retorna: { intent, valor, quantidade, produto, categoria, data }
+// // Retorna:
+// - JSON com { tipo: ... } quando for comando
+// - ou { tipo: 'conversa', resposta: string }
 async function parseMessage(text) {
   const messages = [
     { role: 'system', content: PARSER_SYSTEM },
@@ -104,6 +106,8 @@ async function parseMessage(text) {
   ]
 
   const raw = await groqRequest(messages)
+  
+  console.log('[GROQ PARSER] RAW:', raw)
 
   let parsed = null
 
@@ -117,7 +121,10 @@ async function parseMessage(text) {
     }
   }
 
-  return parsed
+  return {
+  tipo: parsed.tipo || 'desconhecido',
+  ...parsed
+}
 }
 
 module.exports = { parseMessage }
