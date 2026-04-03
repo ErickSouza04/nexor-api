@@ -77,19 +77,19 @@ Regras:
 - Se não for comando, responder normalmente
 `
 
+const PARSER_SYSTEM = `
+...
 Exemplos:
 
 "Comprei 5kg de farinha por 25 reais"
-→ estoque_entrada
-
-"Chegou 10 unidades de salgados"
-→ estoque_entrada
+-> estoque_entrada
 
 "Usei 2kg de farinha"
-→ estoque_saida
+-> estoque_saida
 
-"Retirei 3 produtos do estoque"
-→ estoque_saida
+"Vendi 2 produtos por 50"
+-> venda
+`
 
 // ── Extrai o primeiro JSON válido de uma string ──────────
 function extrairJSON(raw) {
