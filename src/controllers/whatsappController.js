@@ -378,36 +378,49 @@ const handleWebhook = async (req, res) => {
       await sendMessage(phone, MSG_ERRO_IA)
       return
     }
-
-    console.log(`[WHATSAPP] Intent: ${parsed.intent} | user: ${userId}`)
+    
+    
+      if (!parsed || !parsed.tipo) {
+      await sendMessage(phone, MSG_ERRO_IA)
+      return
+    }
+    
+    console.log(`[WHATSAPP] Tipo: ${parsed.tipo} | user: ${userId}`)
 
     // 6. Roteia pelo intent
     let resposta
     try {
-      switch (parsed.intent) {
-        case 'despesa':
-          resposta = await handleDespesa(userId, parsed)
-          break
-        case 'venda':
-          resposta = await handleVenda(userId, parsed)
-          break
-        case 'estoque_entrada':
-          resposta = await handleEstoqueEntrada(userId, parsed)
-          break
-        case 'estoque_saida':
-          resposta = await handleEstoqueSaida(userId, parsed)
-          break
-        case 'consulta_estoque':
-          resposta = await handleConsultaEstoque(userId, parsed)
-          break
-        case 'consulta_lucro':
-          resposta = await handleConsultaLucro(userId)
-          break
-        default:
-          resposta = MSG_AJUDA
-      }
+      switch (parsed.tipo) {
+
+  case 'despesa':
+    resposta = await handleDespesa(userId, parsed)
+    break
+
+  case 'venda':
+    resposta = await handleVenda(userId, parsed)
+    break
+
+  case 'consulta_estoque':
+    resposta = await handleConsultaEstoque(userId, parsed)
+    break
+
+  case 'consulta_financeira':
+    if (parsed.metrica === 'lucro') {
+      resposta = await handleConsultaLucro(userId)
+    } else {
+      resposta = '📊 Essa consulta ainda não está disponível.'
+    }
+    break
+
+  case 'conversa':
+    resposta = parsed.resposta
+    break
+
+  default:
+    resposta = MSG_AJUDA
+}
     } catch (err) {
-      console.error(`[WHATSAPP] Erro no handler ${parsed.intent}:`, err.message)
+      console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
       resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
     }
 
