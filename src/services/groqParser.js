@@ -43,15 +43,14 @@ Entrada de estoque:
   "tipo": "estoque_entrada",
   "produto": "nome",
   "quantidade": número,
-  "valor": número (opcional)
+  "valor": número
 }
 
 Saída de estoque:
 {
   "tipo": "estoque_saida",
   "produto": "nome",
-  "quantidade": número,
-  "valor": número (opcional)
+  "quantidade": número
 }
 
 Consulta estoque:
@@ -69,22 +68,25 @@ Consulta financeira:
 
 ---
 
+Exemplos:
+
+"Comprei 5kg de farinha por 25 reais"
+-> estoque_entrada
+
+"Usei 2kg de farinha"
+-> estoque_saida
+
+"Vendi 2 produtos por 50"
+-> venda
+
+---
+
 Regras:
 - Corrigir erros de áudio automaticamente
 - Converter palavras em número (cem → 100)
 - Ignorar palavras como "tipo", "mano", "acho que"
 - Nunca retornar texto fora do JSON se for comando
 - Se não for comando, responder normalmente
-`
-exemplos:
-"Comprei 5kg de farinha por 25 reais"
-   estoque_entrada
-
-"Usei 2kg de farinha"
-   estoque_saida
-
-"Vendi 2 produtos por 50"
-   venda
 `
 
 // ── Extrai o primeiro JSON válido de uma string ──────────
