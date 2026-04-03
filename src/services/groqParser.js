@@ -10,10 +10,6 @@ const GROQ_URL     = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL   = 'llama-3.3-70b-versatile'
 const TIMEOUT_MS   = 15000  // 15s — contexto WhatsApp é tempo-real
 
-const INTENTS_VALIDOS = [
-  'despesa', 'venda', 'estoque_entrada', 'estoque_saida',
-  'consulta_estoque', 'consulta_lucro', 'desconhecido'
-]
 
 const PARSER_SYSTEM = `
 Você é um assistente inteligente de gestão financeira e estoque via WhatsApp.
@@ -104,20 +100,24 @@ async function groqRequest(messages) {
 async function parseMessage(text) {
   const messages = [
     { role: 'system', content: PARSER_SYSTEM },
-    { role: 'user',   content: text }
+    { role: 'user', content: text }
   ]
 
-  const raw    = await groqRequest(messages)
-  const parsed = extrairJSON(raw)
+  const raw = await groqRequest(messages)
 
-  return {
-    intent:     INTENTS_VALIDOS.includes(parsed.intent) ? parsed.intent : 'desconhecido',
-    valor:      parsed.valor      != null ? parseFloat(parsed.valor)     : null,
-    quantidade: parsed.quantidade != null ? parseFloat(parsed.quantidade): null,
-    produto:    parsed.produto    || null,
-    categoria:  parsed.categoria  || null,
-    data:       parsed.data       || 'hoje',
+  let parsed = null
+
+  try {
+    parsed = extrairJSON(raw)
+  } catch (err) {
+    // Não é JSON → resposta normal da IA
+    return {
+      tipo: 'conversa',
+      resposta: raw
+    }
   }
+
+  return parsed
 }
 
 module.exports = { parseMessage }
