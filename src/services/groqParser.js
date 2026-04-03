@@ -77,8 +77,6 @@ Regras:
 - Se não for comando, responder normalmente
 `
 
-const PARSER_SYSTEM = `
-...
 Exemplos:
 
 "Comprei 5kg de farinha por 25 reais"
