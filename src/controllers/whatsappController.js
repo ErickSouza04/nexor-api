@@ -295,11 +295,9 @@ async function handleConsultaLucro(userId) {
 // WEBHOOK PRINCIPAL
 // ─────────────────────────────────────────────────────────
 const handleWebhook = async (req, res) => {
-  // Responde 200 imediatamente — Evolution API não espera processamento longo
   res.json({ recebido: true })
 
   try {
-    // 1. Valida token secreto
     const tokenEnviado  = req.headers['x-whatsapp-token']
     const tokenEsperado = process.env.WHATSAPP_WEBHOOK_SECRET
     if (tokenEsperado && tokenEnviado !== tokenEsperado) {
@@ -307,29 +305,46 @@ const handleWebhook = async (req, res) => {
       return
     }
 
-    // 2. Extrai phone e text do payload Evolution API
     const evento = req.body?.event
-    if (evento && evento !== 'messages.upsert') return  // ignora eventos que não sejam mensagens
+    if (evento && evento !== 'messages.upsert') return
 
     const data = req.body?.data
     if (!data) return
 
-    // Ignora mensagens enviadas por nós mesmos
     if (data.key?.fromMe === true) return
 
-    const remoteJid = data.key?.remoteJid || ''
-    const phone     = remoteJid.split('@')[0]  // ex: "5511999999999@s.whatsapp.net" → "5511999999999"
+    const normalizePhone = (value = '') => {
+      const cleaned = String(value)
+        .split('@')[0]
+        .replace(/\D/g, '')
+
+      return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+    }
+
+    const rawPhone =
+      data?.key?.participant ||
+      data?.key?.remoteJid ||
+      data?.sender ||
+      req.body?.sender ||
+      ''
+
+    const phone = normalizePhone(rawPhone)
 
     if (!phone) return
 
-    // ── Detecta tipo de mensagem ──────────────────────────
-    const textoPlano = data.message?.conversation || data.message?.extendedTextMessage?.text || null
-    const audioMsg   = data.message?.audioMessage || null
+    console.log('[WHATSAPP] rawPhone:', rawPhone)
+    console.log('[WHATSAPP] normalizedPhone:', phone)
+
+    const textoPlano =
+      data.message?.conversation ||
+      data.message?.extendedTextMessage?.text ||
+      null
+
+    const audioMsg = data.message?.audioMessage || null
 
     let text = textoPlano
 
     if (!textoPlano && audioMsg) {
-      // Áudio: transcrever antes de processar
       const audioData = audioMsg.url || audioMsg.base64 || null
       const mimeType  = audioMsg.mimetype || 'audio/ogg'
 
@@ -340,24 +355,26 @@ const handleWebhook = async (req, res) => {
         return
       }
 
-      // Confirma o que foi entendido antes de processar
       await sendMessage(phone, `🎤 Ouvi: _"${transcricao}"_\nProcessando...`)
       text = transcricao
     }
 
-    if (!text) return  // imagens, stickers, etc. — ignora silenciosamente
+    if (!text) return
 
     console.log(`[WHATSAPP] ${audioMsg ? '🎤 Áudio' : '💬 Texto'} de ${phone}: ${text.substring(0, 60)}`)
 
-    // 3. Busca userId pelo número cadastrado
     const phoneResult = await query(
-      'SELECT user_id FROM user_phones WHERE phone = $1',
+      'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
       [phone]
     )
+
+    console.log('[WHATSAPP] vínculo encontrado:', phoneResult.rows)
+
     if (!phoneResult.rows.length) {
       await sendMessage(phone, MSG_CADASTRO)
       return
     }
+
     const userId = phoneResult.rows[0].user_id
     
     // ─────────────────────────────────────────
