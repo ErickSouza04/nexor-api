@@ -577,55 +577,6 @@ const registerPhone = async (req, res) => {
   }
 }
 
-    // Verifica se já vinculado a outro usuário
-    const existente = await query(
-      'SELECT user_id FROM user_phones WHERE phone = $1',
-      [phone]
-    )
-
-    if (
-      existente.rows.length > 0 &&
-      existente.rows[0].user_id !== userId
-    ) {
-      return res.status(409).json({
-        sucesso: false,
-        erro: 'Este número já está vinculado a outra conta'
-      })
-    }
-
-    const resultado = await query(
-      `INSERT INTO user_phones (user_id, phone)
-       VALUES ($1, $2)
-       ON CONFLICT (phone) 
-       DO UPDATE SET user_id = EXCLUDED.user_id
-       RETURNING *`,
-      [userId, phone]
-    )
-
-    if (resultado.rows.length === 0) {
-      return res.json({
-        sucesso: true,
-        mensagem: 'Número já vinculado a esta conta',
-        dados: null
-      })
-    }
-
-    return res.status(201).json({
-      sucesso: true,
-      mensagem: 'Número vinculado com sucesso!',
-      dados: resultado.rows[0]
-    })
-
-  } catch (err) {
-    console.error('Erro ao vincular telefone:', err)
-    return res.status(500).json({
-      sucesso: false,
-      erro: 'Erro ao vincular número'
-    })
-  }
-}
-
-
 // ─────────────────────────────────────────────────────────
 // VERIFICAR STATUS DO NÚMERO
 // ─────────────────────────────────────────────────────────
