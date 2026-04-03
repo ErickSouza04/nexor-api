@@ -528,13 +528,9 @@ const registerPhone = async (req, res) => {
     const { phone } = req.body
 
     if (!phone) {
-      return res.status(400).json({
-        sucesso: false,
-        erro: 'Campo phone é obrigatório'
-      })
+      return res.status(400).json({ sucesso: false, erro: 'Campo phone é obrigatório' })
     }
 
-    // Normalização
     const normalizedPhone = phone.replace(/\D/g, '')
     const finalPhone = normalizedPhone.startsWith('55')
       ? normalizedPhone
@@ -581,7 +577,6 @@ const registerPhone = async (req, res) => {
   }
 }
 
-module.exports = { registerPhone }
     // Verifica se já vinculado a outro usuário
     const existente = await query(
       'SELECT user_id FROM user_phones WHERE phone = $1',
