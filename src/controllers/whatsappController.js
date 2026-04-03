@@ -531,6 +531,32 @@ const registerPhone = async (req, res) => {
       return res.status(400).json({ sucesso: false, erro: 'Campo phone é obrigatório' })
     }
 
+    // ✅ NORMALIZAÇÃO (ESSENCIAL)
+    const normalizedPhone = phone.replace(/\D/g, '')
+    const finalPhone = normalizedPhone.startsWith('55') 
+      ? normalizedPhone 
+      : `55${normalizedPhone}`
+
+    const resultado = await queryWithUser(userId,
+      `INSERT INTO user_phones (user_id, phone)
+       VALUES ($1, $2)
+       ON CONFLICT (phone) 
+       DO UPDATE SET user_id = EXCLUDED.user_id
+       RETURNING *`,
+      [userId, finalPhone] // 👈 USA O NORMALIZADO
+    )
+
+    res.status(201).json({
+      sucesso: true,
+      mensagem: 'Número vinculado com sucesso!',
+      dados: resultado.rows[0]
+    })
+
+  } catch (err) {
+    console.error('Erro ao vincular telefone:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao vincular número' })
+  }
+}
     // Verifica se já vinculado a outro usuário
     const existente = await query(
       'SELECT user_id FROM user_phones WHERE phone = $1',
@@ -543,7 +569,8 @@ const registerPhone = async (req, res) => {
     const resultado = await queryWithUser(userId,
       `INSERT INTO user_phones (user_id, phone)
        VALUES ($1, $2)
-       ON CONFLICT (phone) DO NOTHING
+       ON CONFLICT (phone) 
+      DO UPDATE SET user_id = EXCLUDED.user_id
        RETURNING *`,
       [userId, phone]
     )
