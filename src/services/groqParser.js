@@ -80,13 +80,13 @@ Regras:
 Exemplos:
 
 "Comprei 5kg de farinha por 25 reais"
--> estoque_entrada
+   estoque_entrada
 
 "Usei 2kg de farinha"
--> estoque_saida
+   estoque_saida
 
 "Vendi 2 produtos por 50"
--> venda
+   venda
 `
 
 // ── Extrai o primeiro JSON válido de uma string ──────────
