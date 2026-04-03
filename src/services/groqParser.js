@@ -76,9 +76,7 @@ Regras:
 - Nunca retornar texto fora do JSON se for comando
 - Se não for comando, responder normalmente
 `
-
-Exemplos:
-
+exemplos:
 "Comprei 5kg de farinha por 25 reais"
    estoque_entrada
 
