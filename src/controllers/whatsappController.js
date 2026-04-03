@@ -389,40 +389,55 @@ const handleWebhook = async (req, res) => {
 
     // 6. Roteia pelo intent
     let resposta
-    try {
-      switch (parsed.tipo) {
+try {
+  console.log('[IA OUTPUT]:', parsed)
 
-  case 'despesa':
-    resposta = await handleDespesa(userId, parsed)
-    break
+  switch (parsed.tipo) {
 
-  case 'venda':
-    resposta = await handleVenda(userId, parsed)
-    break
+    case 'despesa':
+      resposta = await handleDespesa(userId, parsed)
+      break
 
-  case 'consulta_estoque':
-    resposta = await handleConsultaEstoque(userId, parsed)
-    break
+    case 'venda':
+      resposta = await handleVenda(userId, parsed)
+      break
 
-  case 'consulta_financeira':
-    if (parsed.metrica === 'lucro') {
-      resposta = await handleConsultaLucro(userId)
-    } else {
-      resposta = '📊 Essa consulta ainda não está disponível.'
-    }
-    break
+    case 'consulta_estoque':
+      resposta = await handleConsultaEstoque(userId, parsed)
+      break
 
-  case 'conversa':
-    resposta = parsed.resposta
-    break
+    case 'estoque_entrada':
+      resposta = await handleEstoqueEntrada(userId, parsed)
+      break
 
-  default:
-    resposta = MSG_AJUDA
+    case 'estoque_saida':
+      resposta = await handleEstoqueSaida(userId, parsed)
+      break
+
+    case 'consulta_financeira':
+      if (parsed.metrica === 'lucro') {
+        resposta = await handleConsultaLucro(userId)
+      } else if (parsed.metrica === 'faturamento') {
+        resposta = '📊 Faturamento ainda não implementado.'
+      } else if (parsed.metrica === 'despesas') {
+        resposta = '📊 Consulta de despesas ainda não implementada.'
+      } else {
+        resposta = MSG_AJUDA
+      }
+      break
+
+    case 'conversa':
+      resposta = parsed.resposta || MSG_ERRO_IA
+      break
+
+    default:
+      resposta = MSG_AJUDA
+  }
+
+} catch (err) {
+  console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
+  resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
 }
-    } catch (err) {
-      console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
-      resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
-    }
 
     // 7. Envia resposta
     await sendMessage(phone, resposta)
