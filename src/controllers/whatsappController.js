@@ -367,8 +367,10 @@ if (!text || !String(text).trim()) {
 }
 
     // Busca userId pelo número cadastrado
+    console.log('📱 Buscando telefone:', phone)
+
     const phoneResult = await query(
-      'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
+    'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
       [phone]
     )
 
