@@ -298,39 +298,19 @@ const handleWebhook = async (req, res) => {
   res.json({ recebido: true })
 
   try {
+    const body = req.body || {}
+
     console.log('================ WEBHOOK RECEBIDO ================')
     console.log('[WHATSAPP] headers:', req.headers)
-    console.log('[WHATSAPP] body:', JSON.stringify(req.body, null, 2))
+    console.log('[WHATSAPP] body:', JSON.stringify(body, null, 2))
 
-    const tokenEnviado  = req.headers['x-whatsapp-token']
-    const tokenEsperado = process.env.WHATSAPP_WEBHOOK_SECRET
-
-    console.log('[WHATSAPP] tokenEnviado:', tokenEnviado)
-    console.log('[WHATSAPP] tokenEsperado:', tokenEsperado)
-
-    if (tokenEsperado && tokenEnviado !== tokenEsperado) {
-      console.warn('[WHATSAPP] Token inválido recebido')
-      return
-    }
-
-    const evento = req.body?.event
-    console.log('[WHATSAPP] evento:', evento)
-
-    if (evento && evento !== 'messages.upsert') {
-      console.log('[WHATSAPP] Evento ignorado')
-      return
-    }
-
-    const data = req.body?.data
-    if (!data) {
-      console.log('[WHATSAPP] Sem data no payload')
-      return
-    }
-
-    if (data.key?.fromMe === true) {
-      console.log('[WHATSAPP] Mensagem enviada por nós mesmos, ignorando')
-      return
-    }
+    // TEMPORARIAMENTE: desative a validação de token até confirmar o payload da Z-API
+    // const tokenEnviado = req.headers['x-whatsapp-token']
+    // const tokenEsperado = process.env.WHATSAPP_WEBHOOK_SECRET
+    // if (tokenEsperado && tokenEnviado !== tokenEsperado) {
+    //   console.warn('[WHATSAPP] Token inválido recebido')
+    //   return
+    // }
 
     const normalizePhone = (value = '') => {
       const cleaned = String(value)
@@ -340,49 +320,43 @@ const handleWebhook = async (req, res) => {
       return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
     }
 
+    // Compatível com Z-API e mantém fallback para Evolution
+    const isFromMe =
+      body?.fromMe === true ||
+      body?.data?.key?.fromMe === true
+
+    if (isFromMe) {
+      console.log('[WHATSAPP] Mensagem enviada por nós mesmos, ignorando')
+      return
+    }
+
     const rawPhone =
-      data?.key?.participant ||
-      data?.key?.remoteJid ||
-      data?.sender ||
-      req.body?.sender ||
+      body?.phone ||
+      body?.from ||
+      body?.chatId ||
+      body?.sender ||
+      body?.data?.key?.participant ||
+      body?.data?.key?.remoteJid ||
       ''
 
     const phone = normalizePhone(rawPhone)
 
+    const text =
+      body?.text?.message ||
+      body?.text?.body ||
+      body?.message ||
+      body?.body ||
+      body?.data?.message?.conversation ||
+      body?.data?.message?.extendedTextMessage?.text ||
+      null
+
     console.log('[WHATSAPP] rawPhone:', rawPhone)
     console.log('[WHATSAPP] normalizedPhone:', phone)
+    console.log('[WHATSAPP] text:', text)
 
     if (!phone) {
       console.log('[WHATSAPP] Número vazio')
       return
-    }
-
-    const textoPlano =
-      data.message?.conversation ||
-      data.message?.extendedTextMessage?.text ||
-      null
-
-    const audioMsg = data.message?.audioMessage || null
-    let text = textoPlano
-
-    console.log('[WHATSAPP] textoPlano:', textoPlano)
-    console.log('[WHATSAPP] temAudio:', !!audioMsg)
-
-    if (!textoPlano && audioMsg) {
-      const audioData = audioMsg.url || audioMsg.base64 || null
-      const mimeType  = audioMsg.mimetype || 'audio/ogg'
-
-      const transcricao = await transcribeAudio(audioData, mimeType)
-
-      console.log('[WHATSAPP] transcricao:', transcricao)
-
-      if (!transcricao) {
-        await sendMessage(phone, '🎤 Não consegui entender o áudio. Tente digitar a mensagem.')
-        return
-      }
-
-      await sendMessage(phone, `🎤 Ouvi: _"${transcricao}"_\nProcessando...`)
-      text = transcricao
     }
 
     if (!text) {
@@ -390,8 +364,7 @@ const handleWebhook = async (req, res) => {
       return
     }
 
-    console.log('[WHATSAPP] Texto final:', text)
-
+    // Busca userId pelo número cadastrado
     const phoneResult = await query(
       'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
       [phone]
@@ -405,31 +378,23 @@ const handleWebhook = async (req, res) => {
     }
 
     const userId = phoneResult.rows[0].user_id
-console.log('[WHATSAPP] userId:', userId)
+    console.log('[WHATSAPP] userId:', userId)
 
-const userInfo = await query(
-  'SELECT nome, plan, ativo FROM usuarios WHERE id = $1',
-  [userId]
-)
-
-console.log('[WHATSAPP] userInfo:', userInfo.rows)
-
-if (!userInfo.rows.length) {
-  await sendMessage(phone, '❌ Usuário não encontrado.')
-  return
-}
-
-const user = userInfo.rows[0]
-const nome = user?.nome || null
-
-    const userResult = await query(
-      'SELECT plan FROM usuarios WHERE id = $1 AND ativo = TRUE',
+    const userInfo = await query(
+      'SELECT nome, plan, ativo FROM usuarios WHERE id = $1',
       [userId]
     )
 
-    console.log('[WHATSAPP] plano encontrado:', userResult.rows)
+    console.log('[WHATSAPP] userInfo:', userInfo.rows)
 
-    if (!userResult.rows.length || userResult.rows[0].plan !== 'plus') {
+    if (!userInfo.rows.length) {
+      await sendMessage(phone, '❌ Usuário não encontrado.')
+      return
+    }
+
+    const user = userInfo.rows[0]
+
+    if (!user.ativo || user.plan !== 'plus') {
       console.log('[WHATSAPP] Usuário sem plano plus')
       await sendMessage(phone, MSG_UPGRADE)
       return
@@ -458,18 +423,23 @@ const nome = user?.nome || null
         case 'despesa':
           resposta = await handleDespesa(userId, parsed)
           break
+
         case 'venda':
           resposta = await handleVenda(userId, parsed)
           break
+
         case 'consulta_estoque':
           resposta = await handleConsultaEstoque(userId, parsed)
           break
+
         case 'estoque_entrada':
           resposta = await handleEstoqueEntrada(userId, parsed)
           break
+
         case 'estoque_saida':
           resposta = await handleEstoqueSaida(userId, parsed)
           break
+
         case 'consulta_financeira':
           if (parsed.metrica === 'lucro') {
             resposta = await handleConsultaLucro(userId)
@@ -477,9 +447,11 @@ const nome = user?.nome || null
             resposta = MSG_AJUDA
           }
           break
+
         case 'conversa':
           resposta = parsed.resposta || MSG_ERRO_IA
           break
+
         default:
           resposta = MSG_AJUDA
       }
