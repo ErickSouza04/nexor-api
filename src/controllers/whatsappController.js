@@ -405,71 +405,22 @@ const handleWebhook = async (req, res) => {
     }
 
     const userId = phoneResult.rows[0].user_id
-    console.log('[WHATSAPP] userId:', userId)
+console.log('[WHATSAPP] userId:', userId)
 
-    const userInfo = await query(
-      'SELECT name, onboarding_step, plan, ativo FROM usuarios WHERE id = $1',
-      [userId]
-    )
+const userInfo = await query(
+  'SELECT nome, plan, ativo FROM usuarios WHERE id = $1',
+  [userId]
+)
 
-    console.log('[WHATSAPP] userInfo:', userInfo.rows)
+console.log('[WHATSAPP] userInfo:', userInfo.rows)
 
-    const user = userInfo.rows[0]
-    let nome = user?.name || null
-    let step = user?.onboarding_step || null
+if (!userInfo.rows.length) {
+  await sendMessage(phone, '❌ Usuário não encontrado.')
+  return
+}
 
-    if (!step) {
-      console.log('[WHATSAPP] Iniciando onboarding')
-
-      await query(
-        'UPDATE usuarios SET onboarding_step = $1 WHERE id = $2',
-        ['aguardando_nome', userId]
-      )
-
-      await sendMessage(phone,
-`👋 Olá! Eu sou o *Nexor*.
-
-Vou te ajudar a controlar suas vendas, despesas e estoque direto no WhatsApp 💰📦
-
-Antes de começar, como posso te chamar?`)
-      return
-    }
-
-    if (step === 'aguardando_nome') {
-      console.log('[WHATSAPP] Usuário está aguardando_nome')
-      const texto = text.trim()
-
-      if (texto.split(' ').length > 3) {
-        await sendMessage(phone, '👋 Me diga apenas seu nome 🙂')
-        return
-      }
-
-      if (/\d/.test(texto)) {
-        await sendMessage(phone, '👋 O nome não deve conter números 🙂')
-        return
-      }
-
-      const nomeDetectado =
-        texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase()
-
-      await query(
-        'UPDATE usuarios SET name = $1, onboarding_step = $2 WHERE id = $3',
-        [nomeDetectado, 'finalizado', userId]
-      )
-
-      await sendMessage(phone,
-`Prazer, ${nomeDetectado}! 🚀
-
-Agora você pode me mandar mensagens como:
-
-• Vendi 2 produtos por 50  
-• Paguei 30 de embalagem  
-• Comprei 5kg de farinha  
-• Quanto tenho de estoque?
-
-Bora organizar seu negócio 💰`)
-      return
-    }
+const user = userInfo.rows[0]
+const nome = user?.nome || null
 
     const userResult = await query(
       'SELECT plan FROM usuarios WHERE id = $1 AND ativo = TRUE',
