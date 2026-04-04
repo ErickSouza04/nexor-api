@@ -314,10 +314,12 @@ const handleWebhook = async (req, res) => {
 
 const normalizePhone = (value = '') => {
   const cleaned = String(value)
-    .split('@')[0]
+    .replace('@s.whatsapp.net', '')
     .replace(/\D/g, '')
 
-  return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+  if (cleaned.startsWith('55')) return cleaned
+
+  return `55${cleaned}`
 }
 
 // Compatível com Z-API e mantém fallback para Evolution
