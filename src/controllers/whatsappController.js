@@ -312,57 +312,57 @@ const handleWebhook = async (req, res) => {
     //   return
     // }
 
-    const normalizePhone = (value = '') => {
-      const cleaned = String(value)
-        .split('@')[0]
-        .replace(/\D/g, '')
+const normalizePhone = (value = '') => {
+  const cleaned = String(value)
+    .split('@')[0]
+    .replace(/\D/g, '')
 
-      return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
-    }
+  return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+}
 
-    // Compatível com Z-API e mantém fallback para Evolution
-    const isFromMe =
-      body?.fromMe === true ||
-      body?.data?.key?.fromMe === true
+// Compatível com Z-API e mantém fallback para Evolution
+const isFromMe =
+  body?.fromMe === true ||
+  body?.data?.key?.fromMe === true
 
-    if (isFromMe) {
-      console.log('[WHATSAPP] Mensagem enviada por nós mesmos, ignorando')
-      return
-    }
+if (isFromMe) {
+  console.log('[WHATSAPP] Mensagem enviada por nós mesmos, ignorando')
+  return
+}
 
-    const rawPhone =
-      body?.phone ||
-      body?.from ||
-      body?.chatId ||
-      body?.sender ||
-      body?.data?.key?.participant ||
-      body?.data?.key?.remoteJid ||
-      ''
+const rawPhone =
+  body?.phone ||
+  body?.from ||
+  body?.chatId ||
+  body?.sender ||
+  body?.data?.key?.participant ||
+  body?.data?.key?.remoteJid ||
+  ''
 
-    const phone = normalizePhone(rawPhone)
+const phone = normalizePhone(rawPhone)
 
-    const text =
-      body?.text?.message ||
-      body?.text?.body ||
-      body?.message ||
-      body?.body ||
-      body?.data?.message?.conversation ||
-      body?.data?.message?.extendedTextMessage?.text ||
-      null
+const text =
+  body?.text?.message ||
+  body?.text?.body ||
+  body?.message ||
+  body?.body ||
+  body?.data?.message?.conversation ||
+  body?.data?.message?.extendedTextMessage?.text ||
+  null
 
-    console.log('[WHATSAPP] rawPhone:', rawPhone)
-    console.log('[WHATSAPP] normalizedPhone:', phone)
-    console.log('[WHATSAPP] text:', text)
+console.log('[WHATSAPP] rawPhone:', rawPhone)
+console.log('[WHATSAPP] normalizedPhone:', phone)
+console.log('[WHATSAPP] text:', text)
 
-    if (!phone) {
-      console.log('[WHATSAPP] Número vazio')
-      return
-    }
+if (!rawPhone || phone === '55') {
+  console.log('[WHATSAPP] Número vazio')
+  return
+}
 
-    if (!text) {
-      console.log('[WHATSAPP] Sem texto para processar')
-      return
-    }
+if (!text || !String(text).trim()) {
+  console.log('[WHATSAPP] Sem texto para processar')
+  return
+}
 
     // Busca userId pelo número cadastrado
     const phoneResult = await query(
