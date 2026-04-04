@@ -298,20 +298,39 @@ const handleWebhook = async (req, res) => {
   res.json({ recebido: true })
 
   try {
+    console.log('================ WEBHOOK RECEBIDO ================')
+    console.log('[WHATSAPP] headers:', req.headers)
+    console.log('[WHATSAPP] body:', JSON.stringify(req.body, null, 2))
+
     const tokenEnviado  = req.headers['x-whatsapp-token']
     const tokenEsperado = process.env.WHATSAPP_WEBHOOK_SECRET
+
+    console.log('[WHATSAPP] tokenEnviado:', tokenEnviado)
+    console.log('[WHATSAPP] tokenEsperado:', tokenEsperado)
+
     if (tokenEsperado && tokenEnviado !== tokenEsperado) {
       console.warn('[WHATSAPP] Token inválido recebido')
       return
     }
 
     const evento = req.body?.event
-    if (evento && evento !== 'messages.upsert') return
+    console.log('[WHATSAPP] evento:', evento)
+
+    if (evento && evento !== 'messages.upsert') {
+      console.log('[WHATSAPP] Evento ignorado')
+      return
+    }
 
     const data = req.body?.data
-    if (!data) return
+    if (!data) {
+      console.log('[WHATSAPP] Sem data no payload')
+      return
+    }
 
-    if (data.key?.fromMe === true) return
+    if (data.key?.fromMe === true) {
+      console.log('[WHATSAPP] Mensagem enviada por nós mesmos, ignorando')
+      return
+    }
 
     const normalizePhone = (value = '') => {
       const cleaned = String(value)
@@ -330,10 +349,13 @@ const handleWebhook = async (req, res) => {
 
     const phone = normalizePhone(rawPhone)
 
-    if (!phone) return
-
     console.log('[WHATSAPP] rawPhone:', rawPhone)
     console.log('[WHATSAPP] normalizedPhone:', phone)
+
+    if (!phone) {
+      console.log('[WHATSAPP] Número vazio')
+      return
+    }
 
     const textoPlano =
       data.message?.conversation ||
@@ -341,14 +363,18 @@ const handleWebhook = async (req, res) => {
       null
 
     const audioMsg = data.message?.audioMessage || null
-
     let text = textoPlano
+
+    console.log('[WHATSAPP] textoPlano:', textoPlano)
+    console.log('[WHATSAPP] temAudio:', !!audioMsg)
 
     if (!textoPlano && audioMsg) {
       const audioData = audioMsg.url || audioMsg.base64 || null
       const mimeType  = audioMsg.mimetype || 'audio/ogg'
 
       const transcricao = await transcribeAudio(audioData, mimeType)
+
+      console.log('[WHATSAPP] transcricao:', transcricao)
 
       if (!transcricao) {
         await sendMessage(phone, '🎤 Não consegui entender o áudio. Tente digitar a mensagem.')
@@ -359,9 +385,12 @@ const handleWebhook = async (req, res) => {
       text = transcricao
     }
 
-    if (!text) return
+    if (!text) {
+      console.log('[WHATSAPP] Sem texto para processar')
+      return
+    }
 
-    console.log(`[WHATSAPP] ${audioMsg ? '🎤 Áudio' : '💬 Texto'} de ${phone}: ${text.substring(0, 60)}`)
+    console.log('[WHATSAPP] Texto final:', text)
 
     const phoneResult = await query(
       'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
@@ -376,60 +405,59 @@ const handleWebhook = async (req, res) => {
     }
 
     const userId = phoneResult.rows[0].user_id
-    
-    // ─────────────────────────────────────────
-// 4. ONBOARDING NEXOR
-// ─────────────────────────────────────────
+    console.log('[WHATSAPP] userId:', userId)
 
-const userInfo = await query(
-  'SELECT name, onboarding_step FROM usuarios WHERE id = $1',
-  [userId]
-)
+    const userInfo = await query(
+      'SELECT name, onboarding_step, plan, ativo FROM usuarios WHERE id = $1',
+      [userId]
+    )
 
-const user = userInfo.rows[0]
-let nome = user?.name || null
-let step = user?.onboarding_step || null
+    console.log('[WHATSAPP] userInfo:', userInfo.rows)
 
-// 🟢 INICIAR ONBOARDING
-if (!step) {
-  await query(
-    'UPDATE usuarios SET onboarding_step = $1 WHERE id = $2',
-    ['aguardando_nome', userId]
-  )
+    const user = userInfo.rows[0]
+    let nome = user?.name || null
+    let step = user?.onboarding_step || null
 
-  await sendMessage(phone,
+    if (!step) {
+      console.log('[WHATSAPP] Iniciando onboarding')
+
+      await query(
+        'UPDATE usuarios SET onboarding_step = $1 WHERE id = $2',
+        ['aguardando_nome', userId]
+      )
+
+      await sendMessage(phone,
 `👋 Olá! Eu sou o *Nexor*.
 
 Vou te ajudar a controlar suas vendas, despesas e estoque direto no WhatsApp 💰📦
 
 Antes de começar, como posso te chamar?`)
+      return
+    }
 
-  return
-}
+    if (step === 'aguardando_nome') {
+      console.log('[WHATSAPP] Usuário está aguardando_nome')
+      const texto = text.trim()
 
-// 🟢 CAPTURAR NOME
-if (step === 'aguardando_nome') {
-  const texto = text.trim()
+      if (texto.split(' ').length > 3) {
+        await sendMessage(phone, '👋 Me diga apenas seu nome 🙂')
+        return
+      }
 
-  if (texto.split(' ').length > 3) {
-    await sendMessage(phone, '👋 Me diga apenas seu nome 🙂')
-    return
-  }
+      if (/\d/.test(texto)) {
+        await sendMessage(phone, '👋 O nome não deve conter números 🙂')
+        return
+      }
 
-  if (/\d/.test(texto)) {
-    await sendMessage(phone, '👋 O nome não deve conter números 🙂')
-    return
-  }
+      const nomeDetectado =
+        texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase()
 
-  const nomeDetectado =
-    texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase()
+      await query(
+        'UPDATE usuarios SET name = $1, onboarding_step = $2 WHERE id = $3',
+        [nomeDetectado, 'finalizado', userId]
+      )
 
-  await query(
-    'UPDATE usuarios SET name = $1, onboarding_step = $2 WHERE id = $3',
-    [nomeDetectado, 'finalizado', userId]
-  )
-
-  await sendMessage(phone,
+      await sendMessage(phone,
 `Prazer, ${nomeDetectado}! 🚀
 
 Agora você pode me mandar mensagens como:
@@ -440,95 +468,76 @@ Agora você pode me mandar mensagens como:
 • Quanto tenho de estoque?
 
 Bora organizar seu negócio 💰`)
+      return
+    }
 
-  return
-}
-
-// ─────────────────────────────────────────
-// FIM ONBOARDING
-// ─────────────────────────────────────────
-
-    // 5. Verifica plano Plus
     const userResult = await query(
       'SELECT plan FROM usuarios WHERE id = $1 AND ativo = TRUE',
       [userId]
     )
+
+    console.log('[WHATSAPP] plano encontrado:', userResult.rows)
+
     if (!userResult.rows.length || userResult.rows[0].plan !== 'plus') {
+      console.log('[WHATSAPP] Usuário sem plano plus')
       await sendMessage(phone, MSG_UPGRADE)
       return
     }
 
-    // 6. Parseia a mensagem com Groq
     let parsed
     try {
       parsed = await parseMessage(text)
+      console.log('[WHATSAPP] parsed:', parsed)
     } catch (err) {
       console.error('[WHATSAPP] Erro no Groq parser:', err.message)
       await sendMessage(phone, MSG_ERRO_IA)
       return
     }
-    
-    
-      if (!parsed || !parsed.tipo) {
+
+    if (!parsed || !parsed.tipo) {
+      console.log('[WHATSAPP] parsed inválido')
       await sendMessage(phone, MSG_ERRO_IA)
       return
     }
-    
-    console.log(`[WHATSAPP] Tipo: ${parsed.tipo} | user: ${userId}`)
 
-    // 7. Roteia pelo intent
     let resposta
-try {
-  console.log('[IA OUTPUT]:', parsed)
 
-  switch (parsed.tipo) {
-
-    case 'despesa':
-      resposta = await handleDespesa(userId, parsed)
-      break
-
-    case 'venda':
-      resposta = await handleVenda(userId, parsed)
-      break
-
-    case 'consulta_estoque':
-      resposta = await handleConsultaEstoque(userId, parsed)
-      break
-
-    case 'estoque_entrada':
-      resposta = await handleEstoqueEntrada(userId, parsed)
-      break
-
-    case 'estoque_saida':
-      resposta = await handleEstoqueSaida(userId, parsed)
-      break
-
-    case 'consulta_financeira':
-      if (parsed.metrica === 'lucro') {
-        resposta = await handleConsultaLucro(userId)
-      } else if (parsed.metrica === 'faturamento') {
-        resposta = '📊 Faturamento ainda não implementado.'
-      } else if (parsed.metrica === 'despesas') {
-        resposta = '📊 Consulta de despesas ainda não implementada.'
-      } else {
-        resposta = MSG_AJUDA
+    try {
+      switch (parsed.tipo) {
+        case 'despesa':
+          resposta = await handleDespesa(userId, parsed)
+          break
+        case 'venda':
+          resposta = await handleVenda(userId, parsed)
+          break
+        case 'consulta_estoque':
+          resposta = await handleConsultaEstoque(userId, parsed)
+          break
+        case 'estoque_entrada':
+          resposta = await handleEstoqueEntrada(userId, parsed)
+          break
+        case 'estoque_saida':
+          resposta = await handleEstoqueSaida(userId, parsed)
+          break
+        case 'consulta_financeira':
+          if (parsed.metrica === 'lucro') {
+            resposta = await handleConsultaLucro(userId)
+          } else {
+            resposta = MSG_AJUDA
+          }
+          break
+        case 'conversa':
+          resposta = parsed.resposta || MSG_ERRO_IA
+          break
+        default:
+          resposta = MSG_AJUDA
       }
-      break
+    } catch (err) {
+      console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
+      resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
+    }
 
-    case 'conversa':
-      resposta = parsed.resposta || MSG_ERRO_IA
-      break
-
-    default:
-      resposta = MSG_AJUDA
-  }
-
-} catch (err) {
-  console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
-  resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
-}
-
-    // 8. Envia resposta
+    console.log('[WHATSAPP] resposta final:', resposta)
     await sendMessage(phone, resposta)
 
   } catch (err) {
