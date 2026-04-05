@@ -312,16 +312,17 @@ const handleWebhook = async (req, res) => {
 
 const normalizePhone = (value = '') => {
   const cleaned = String(value)
+    .split('@')[0]
     .replace('@s.whatsapp.net', '')
     .replace(/\D/g, '')
 
-  if (cleaned.startsWith('55')) return cleaned
-
-  return `55${cleaned}`
+  if (!cleaned) return ''
+  return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
 }
 
-// Compatível com Z-API e mantém fallback para Evolution
+// Compatível com Z-API real + fallbacks antigos
 const isFromMe =
+  body?.['de mim'] === true ||
   body?.fromMe === true ||
   body?.data?.key?.fromMe === true
 
@@ -331,6 +332,7 @@ if (isFromMe) {
 }
 
 const rawPhone =
+  body?.telefone ||
   body?.phone ||
   body?.from ||
   body?.chatId ||
@@ -342,6 +344,7 @@ const rawPhone =
 const phone = normalizePhone(rawPhone)
 
 const text =
+  body?.Texto?.message ||
   body?.text?.message ||
   body?.text?.body ||
   body?.message ||
@@ -354,7 +357,7 @@ console.log('[WHATSAPP] rawPhone:', rawPhone)
 console.log('[WHATSAPP] normalizedPhone:', phone)
 console.log('[WHATSAPP] text:', text)
 
-if (!rawPhone || phone === '55') {
+if (!phone) {
   console.log('[WHATSAPP] Número vazio')
   return
 }
