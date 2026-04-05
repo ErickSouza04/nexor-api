@@ -541,10 +541,10 @@ const verificarStatus = async (req, res) => {
       [userId]
     )
     res.json({
-      sucesso:   true,
-      vinculado: resultado.rows.length > 0,
-      dados:     resultado.rows
-    })
+  sucesso: true,
+  vinculado: resultado.rows.length > 0,
+  dados: resultado.rows[0] || null
+})
   } catch (err) {
     console.error('Erro ao verificar status WhatsApp:', err)
     res.status(500).json({ sucesso: false, erro: 'Erro ao verificar status' })
