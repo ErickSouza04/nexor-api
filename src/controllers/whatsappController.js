@@ -1,17 +1,15 @@
 // src/controllers/whatsappController.js
-// ─────────────────────────────────────────────────────────
 // Agente WhatsApp — orquestra parser Groq + handlers de intent
-// + envio via Evolution API
+// + envio via Z-API
 //
 // Fluxo do webhook:
-//   1. Valida token secreto
-//   2. Extrai phone + text do payload Evolution API
+//   1. Recebe payload da Z-API
+//   2. Extrai phone + text do payload
 //   3. Busca userId em user_phones
-//   4. ONBOARDING (ANTES DE TUDO)
-//   5. Verifica plano 'plus'
-//   6. Chama groqParser.parseMessage()
-//   7. Roteia pelo intent → executa operação no banco
-//   8. Responde via whatsappSender.sendMessage()
+//   4. Verifica plano 'plus'
+//   5. Chama groqParser.parseMessage()
+//   6. Roteia pelo intent → executa operação no banco
+//   7. Responde via whatsappSender.sendMessage()
 // ─────────────────────────────────────────────────────────
 const { query, queryWithUser, transaction } = require('../config/database')
 const { parseMessage }     = require('../services/groqParser')
