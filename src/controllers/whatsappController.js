@@ -347,7 +347,8 @@ const text =
   body?.Texto?.message ||
   body?.text?.message ||
   body?.text?.body ||
-  body?.message ||
+  body?.message?.text ||
+  (typeof body?.message === 'string' ? body.message : null) ||
   body?.body ||
   body?.data?.message?.conversation ||
   body?.data?.message?.extendedTextMessage?.text ||
