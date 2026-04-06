@@ -293,84 +293,71 @@ async function handleConsultaLucro(userId) {
 // WEBHOOK PRINCIPAL
 // ─────────────────────────────────────────────────────────
 const handleWebhook = async (req, res) => {
-  res.json({ recebido: true })
+  res.sendStatus(200)
 
   try {
     const body = req.body || {}
 
     console.log('================ WEBHOOK RECEBIDO ================')
-    console.log('[WHATSAPP] headers:', req.headers)
-    console.log('[WHATSAPP] body:', JSON.stringify(body, null, 2))
+    console.log('[WHATSAPP] payload completo:', JSON.stringify(body, null, 2))
 
-    // TEMPORARIAMENTE: desative a validação de token até confirmar o payload da Z-API
-    // const tokenEnviado = req.headers['x-whatsapp-token']
-    // const tokenEsperado = process.env.WHATSAPP_WEBHOOK_SECRET
-    // if (tokenEsperado && tokenEnviado !== tokenEsperado) {
-    //   console.warn('[WHATSAPP] Token inválido recebido')
-    //   return
-    // }
+    // ── Extração dos campos — suporta Z-API real + Hoppscotch ──
+    const phone     = body.phone || body.connectedPhone || ''
+    const text      = body?.text?.message || body?.message?.text || body?.message || ''
+    const messageId = body.messageId || body.id || null
+    const type      = body.type || body.event || ''
+    const fromMe    = body.fromMe === true
+    const isAudio   = !!body?.audio?.audioUrl
+    const audioUrl  = body?.audio?.audioUrl || null
+    const mimeType  = body?.audio?.mimeType || 'audio/ogg'
 
-const normalizePhone = (value = '') => {
-  const cleaned = String(value)
-    .split('@')[0]
-    .replace('@s.whatsapp.net', '')
-    .replace(/\D/g, '')
+    console.log('[WHATSAPP] phone extraído:', phone)
+    console.log('[WHATSAPP] text extraído:', text)
+    console.log('[WHATSAPP] messageId:', messageId)
+    console.log('[WHATSAPP] type:', type)
+    console.log('[WHATSAPP] fromMe:', fromMe)
+    console.log('[WHATSAPP] isAudio:', isAudio, '| audioUrl:', audioUrl)
 
-  if (!cleaned) return ''
-  return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
-}
+    // ── Ignora mensagens enviadas pelo próprio bot ──────────
+    if (fromMe) {
+      console.log('[WHATSAPP] Mensagem fromMe — ignorando')
+      return
+    }
 
-// Compatível com Z-API real + fallbacks antigos
-const isFromMe =
-  body?.['de mim'] === true ||
-  body?.fromMe === true ||
-  body?.data?.key?.fromMe === true
+    // ── Ignora eventos sem número de origem ────────────────
+    if (!phone) {
+      console.log('[WHATSAPP] phone vazio — ignorando')
+      return
+    }
 
-if (isFromMe) {
-  console.log('[WHATSAPP] Mensagem enviada por nós mesmos, ignorando')
-  return
-}
+    // ── Ignora webhooks sem conteúdo processável ───────────
+    if (!text && !isAudio) {
+      console.log('[WHATSAPP] Sem texto nem áudio — ignorando (type:', type, ')')
+      return
+    }
 
-const rawPhone =
-  body?.telefone ||
-  body?.phone ||
-  body?.from ||
-  body?.chatId ||
-  body?.sender ||
-  body?.data?.key?.participant ||
-  body?.data?.key?.remoteJid ||
-  ''
+    // ── Normaliza phone para formato brasileiro 55XXXXXXXXXX ─
+    const normalizePhone = (value = '') => {
+      const cleaned = String(value).replace(/\D/g, '')
+      if (!cleaned) return ''
+      return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+    }
 
-const phone = normalizePhone(rawPhone)
+    const phoneNorm = normalizePhone(phone)
+    console.log('[WHATSAPP] phone normalizado:', phoneNorm)
 
-const text = body?.message?.text ?? body?.message ?? ''
-
-console.log('[WHATSAPP] rawPhone:', rawPhone)
-console.log('[WHATSAPP] normalizedPhone:', phone)
-console.log('[WHATSAPP] text:', text)
-
-if (!phone) {
-  console.log('[WHATSAPP] Número vazio')
-  return
-}
-
-if (!text || !String(text).trim()) {
-  console.log('[WHATSAPP] Sem texto para processar')
-  return
-}
-
-    // Busca userId pelo número cadastrado
-    console.log('📱 Buscando telefone:', phone)
+    // ── Busca userId pelo número cadastrado ─────────────────
+    console.log('[WHATSAPP] buscando vínculo para:', phoneNorm)
 
     const phoneResult = await query(
-    'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
-      [phone]
+      'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
+      [phoneNorm]
     )
 
     console.log('[WHATSAPP] vínculo encontrado:', phoneResult.rows)
 
     if (!phoneResult.rows.length) {
-      await sendMessage(phone, MSG_CADASTRO)
+      await sendMessage(phoneNorm, MSG_CADASTRO)
       return
     }
 
@@ -385,7 +372,7 @@ if (!text || !String(text).trim()) {
     console.log('[WHATSAPP] userInfo:', userInfo.rows)
 
     if (!userInfo.rows.length) {
-      await sendMessage(phone, '❌ Usuário não encontrado.')
+      await sendMessage(phoneNorm, '❌ Usuário não encontrado.')
       return
     }
 
@@ -393,23 +380,39 @@ if (!text || !String(text).trim()) {
 
     if (!user.ativo || user.plan !== 'plus') {
       console.log('[WHATSAPP] Usuário sem plano plus')
-      await sendMessage(phone, MSG_UPGRADE)
+      await sendMessage(phoneNorm, MSG_UPGRADE)
       return
+    }
+
+    // ── Transcrição de áudio (Groq Whisper) se necessário ──
+    let messageText = text
+    if (isAudio && audioUrl) {
+      console.log('[WHATSAPP] Tipo: ÁUDIO — iniciando transcrição Whisper:', audioUrl)
+      const transcricao = await transcribeAudio(audioUrl, mimeType)
+      if (!transcricao) {
+        console.warn('[WHATSAPP] Transcrição falhou ou vazia')
+        await sendMessage(phoneNorm, '🎤 Não consegui entender o áudio. Tente enviar uma mensagem de texto.')
+        return
+      }
+      messageText = transcricao
+      console.log('[WHATSAPP] Transcrição concluída:', messageText)
+    } else {
+      console.log('[WHATSAPP] Tipo: TEXTO —', messageText)
     }
 
     let parsed
     try {
-      parsed = await parseMessage(text)
+      parsed = await parseMessage(messageText)
       console.log('[WHATSAPP] parsed:', parsed)
     } catch (err) {
       console.error('[WHATSAPP] Erro no Groq parser:', err.message)
-      await sendMessage(phone, MSG_ERRO_IA)
+      await sendMessage(phoneNorm, MSG_ERRO_IA)
       return
     }
 
     if (!parsed || !parsed.tipo) {
       console.log('[WHATSAPP] parsed inválido')
-      await sendMessage(phone, MSG_ERRO_IA)
+      await sendMessage(phoneNorm, MSG_ERRO_IA)
       return
     }
 
@@ -457,8 +460,8 @@ if (!text || !String(text).trim()) {
       resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
     }
 
-    console.log('[WHATSAPP] resposta final:', resposta)
-    await sendMessage(phone, resposta)
+    console.log('[WHATSAPP] enviando resposta para', phoneNorm, ':', resposta)
+    await sendMessage(phoneNorm, resposta)
 
   } catch (err) {
     console.error('[WHATSAPP] Erro inesperado no webhook:', err)
