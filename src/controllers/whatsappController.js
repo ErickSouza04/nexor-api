@@ -357,7 +357,7 @@ const handleWebhook = async (req, res) => {
     console.log('[WHATSAPP] vínculo encontrado:', phoneResult.rows)
 
     if (!phoneResult.rows.length) {
-      await sendMessage(phoneNorm, MSG_CADASTRO)
+      await sendMessage(phoneNorm, MSG_CADASTRO, messageId)
       return
     }
 
@@ -372,7 +372,7 @@ const handleWebhook = async (req, res) => {
     console.log('[WHATSAPP] userInfo:', userInfo.rows)
 
     if (!userInfo.rows.length) {
-      await sendMessage(phoneNorm, '❌ Usuário não encontrado.')
+      await sendMessage(phoneNorm, '❌ Usuário não encontrado.', messageId)
       return
     }
 
@@ -380,7 +380,7 @@ const handleWebhook = async (req, res) => {
 
     if (!user.ativo || user.plan !== 'plus') {
       console.log('[WHATSAPP] Usuário sem plano plus')
-      await sendMessage(phoneNorm, MSG_UPGRADE)
+      await sendMessage(phoneNorm, MSG_UPGRADE, messageId)
       return
     }
 
@@ -391,7 +391,7 @@ const handleWebhook = async (req, res) => {
       const transcricao = await transcribeAudio(audioUrl, mimeType)
       if (!transcricao) {
         console.warn('[WHATSAPP] Transcrição falhou ou vazia')
-        await sendMessage(phoneNorm, '🎤 Não consegui entender o áudio. Tente enviar uma mensagem de texto.')
+        await sendMessage(phoneNorm, '🎤 Não consegui entender o áudio. Tente enviar uma mensagem de texto.', messageId)
         return
       }
       messageText = transcricao
@@ -406,13 +406,13 @@ const handleWebhook = async (req, res) => {
       console.log('[WHATSAPP] parsed:', parsed)
     } catch (err) {
       console.error('[WHATSAPP] Erro no Groq parser:', err.message)
-      await sendMessage(phoneNorm, MSG_ERRO_IA)
+      await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
       return
     }
 
     if (!parsed || !parsed.tipo) {
       console.log('[WHATSAPP] parsed inválido')
-      await sendMessage(phoneNorm, MSG_ERRO_IA)
+      await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
       return
     }
 
@@ -460,8 +460,8 @@ const handleWebhook = async (req, res) => {
       resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
     }
 
-    console.log('[WHATSAPP] enviando resposta para', phoneNorm, ':', resposta)
-    await sendMessage(phoneNorm, resposta)
+    console.log('[WHATSAPP] enviando resposta para', phoneNorm, '(reply a', messageId, '):', resposta)
+    await sendMessage(phoneNorm, resposta, messageId)
 
   } catch (err) {
     console.error('[WHATSAPP] Erro inesperado no webhook:', err)
