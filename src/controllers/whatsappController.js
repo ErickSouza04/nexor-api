@@ -545,6 +545,21 @@ const verificarStatus = async (req, res) => {
 }
 
 // ─────────────────────────────────────────────────────────
+// DESVINCULAR TELEFONE DO USUÁRIO (requer JWT)
+// ─────────────────────────────────────────────────────────
+const desvinularPhone = async (req, res) => {
+  try {
+    const userId = req.userId
+    await queryWithUser(userId,
+      'DELETE FROM user_phones WHERE user_id = $1', [userId])
+    res.json({ sucesso: true, mensagem: 'Número desvinculado.' })
+  } catch (err) {
+    console.error('Erro ao desvincular telefone:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao desvincular' })
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // ENVIAR MENSAGEM PROATIVA
 // ─────────────────────────────────────────────────────────
 const enviarMensagem = async (req, res) => {
@@ -573,4 +588,4 @@ const enviarMensagem = async (req, res) => {
   }
 }
 
-module.exports = { handleWebhook, registerPhone, verificarStatus, enviarMensagem }
+module.exports = { handleWebhook, registerPhone, desvinularPhone, verificarStatus, enviarMensagem }

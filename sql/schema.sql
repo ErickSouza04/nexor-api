@@ -100,6 +100,28 @@ CREATE TABLE IF NOT EXISTS produtos (
 );
 
 -- ─────────────────────────────────────────
+-- TABELA: user_phones
+-- Vincula número de WhatsApp a um usuário
+-- ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_phones (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  phone      VARCHAR(20) NOT NULL,
+  verified   BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(phone)
+);
+
+ALTER TABLE user_phones ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY isolamento_user_phones ON user_phones
+  USING     (user_id = current_setting('app.current_user_id', true)::uuid)
+  WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
+
+CREATE INDEX IF NOT EXISTS idx_user_phones_phone    ON user_phones(phone);
+CREATE INDEX IF NOT EXISTS idx_user_phones_user_id  ON user_phones(user_id);
+
+-- ─────────────────────────────────────────
 -- TABELA: webhook_stripe
 -- ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS webhook_stripe (

@@ -16,8 +16,9 @@ const protegido = [autenticar, exigirPlanoAtivo, checkPlan('plus')]
 router.post('/webhook',        whatsappCtrl.handleWebhook)
 
 // Rotas protegidas por plano Plus
-router.post('/register-phone', ...protegido, whatsappCtrl.registerPhone)
-router.get('/status',          ...protegido, whatsappCtrl.verificarStatus)
-router.post('/send',           ...protegido, whatsappCtrl.enviarMensagem)
+router.post('/register-phone',   ...protegido, whatsappCtrl.registerPhone)
+router.delete('/register-phone', ...protegido, whatsappCtrl.desvinularPhone)
+router.get('/status',            ...protegido, whatsappCtrl.verificarStatus)
+router.post('/send',             ...protegido, whatsappCtrl.enviarMensagem)
 
 module.exports = router
