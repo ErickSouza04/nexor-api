@@ -131,7 +131,7 @@ async function groqRequest(messages) {
 async function parseMessage(text) {
   const messages = [
     { role: 'system', content: PARSER_SYSTEM },
-    { role: 'user', content: text }
+    { role: 'user', content: String(text) }
   ]
 
   const raw = await groqRequest(messages)

@@ -343,15 +343,7 @@ const rawPhone =
 
 const phone = normalizePhone(rawPhone)
 
-const text =
-  body?.Texto?.message ||
-  body?.text?.message ||
-  body?.text?.body ||
-  body?.message ||
-  body?.body ||
-  body?.data?.message?.conversation ||
-  body?.data?.message?.extendedTextMessage?.text ||
-  null
+const text = body?.message?.text ?? body?.message ?? ''
 
 console.log('[WHATSAPP] rawPhone:', rawPhone)
 console.log('[WHATSAPP] normalizedPhone:', phone)
