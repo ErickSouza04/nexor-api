@@ -293,10 +293,13 @@ async function handleConsultaLucro(userId) {
 // WEBHOOK PRINCIPAL
 // ─────────────────────────────────────────────────────────
 const handleWebhook = async (req, res) => {
-  res.sendStatus(200)
-
   try {
     const body = req.body || {}
+
+    // ── Ignora callbacks de status (entregue, lido, falhou, etc.) ──
+    if (body.type === 'MessageStatusCallback') return res.sendStatus(200)
+
+    res.sendStatus(200)
 
     console.log('================ WEBHOOK RECEBIDO ================')
     console.log('[WHATSAPP] payload completo:', JSON.stringify(body, null, 2))
