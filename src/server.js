@@ -72,30 +72,43 @@ app.get('/health', async (req, res) => {
 app.use(helmet())
 
 // ── 2. CORS — Apenas origens permitidas ─────────────────
-// Domínios fixos sempre permitidos (produção + dev local)
 const ORIGENS_FIXAS = [
   'https://usenexor.site',
   'https://www.usenexor.site',
   'http://localhost:3000',
   'http://localhost:5173',
 ]
-// ALLOWED_ORIGINS na env permite adicionar origens extras sem alterar código
+
 const origensExtras = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
   : []
+
 const origensPermitidas = [...new Set([...ORIGENS_FIXAS, ...origensExtras])]
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Permite requisições sem origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true)
-    if (origensPermitidas.includes(origin)) return callback(null, true)
-    callback(new Error(`CORS bloqueado para origem: ${origin}`))
-  },
-  methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials:    true
+// ✅ webhook público
+app.use('/api/whatsapp/webhook', cors({
+  origin: '*',
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }))
+
+// ✅ CORS restrito para o restante
+app.use((req, res, next) => {
+  if (req.path === '/api/whatsapp/webhook') {
+    return next()
+  }
+
+  return cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      if (origensPermitidas.includes(origin)) return callback(null, true)
+      return callback(new Error(`CORS bloqueado para origem: ${origin}`))
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  })(req, res, next)
+})
 
 // ── 3. RATE LIMITING — Anti força bruta ─────────────────
 const limiteGeral = rateLimit({
