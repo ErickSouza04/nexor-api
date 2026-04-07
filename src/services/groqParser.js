@@ -111,7 +111,7 @@ async function groqRequest(messages) {
         'Content-Type':  'application/json',
         'Authorization': 'Bearer ' + process.env.GROQ_API_KEY
       },
-      body: JSON.stringify({ model: GROQ_MODEL, max_tokens: 200, messages })
+      body: JSON.stringify({ model: GROQ_MODEL, max_tokens: 800, messages })
     })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error?.message || 'Groq API error')
@@ -124,18 +124,21 @@ async function groqRequest(messages) {
 }
 
 // ── PARSE ─────────────────────────────────────────────────
-// text: string com a mensagem do usuário
-// // Retorna:
+// text   : string com a mensagem do usuário
+// history: Array<{role, content}> — histórico recente da conversa (opcional)
+//
+// Retorna:
 // - JSON com { tipo: ... } quando for comando
 // - ou { tipo: 'conversa', resposta: string }
-async function parseMessage(text) {
+async function parseMessage(text, history = []) {
   const messages = [
     { role: 'system', content: PARSER_SYSTEM },
+    ...history.map(h => ({ role: h.role, content: String(h.content) })),
     { role: 'user', content: String(text) }
   ]
 
   const raw = await groqRequest(messages)
-  
+
   console.log('[GROQ PARSER] RAW:', raw)
 
   let parsed = null
@@ -151,9 +154,9 @@ async function parseMessage(text) {
   }
 
   return {
-  tipo: parsed.tipo || 'desconhecido',
-  ...parsed
-}
+    tipo: parsed.tipo || 'desconhecido',
+    ...parsed
+  }
 }
 
 module.exports = { parseMessage }

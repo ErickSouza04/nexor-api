@@ -7,14 +7,18 @@
 //   2. Extrai phone + text do payload
 //   3. Busca userId em user_phones
 //   4. Verifica plano 'plus'
-//   5. Chama groqParser.parseMessage()
-//   6. Roteia pelo intent → executa operação no banco
-//   7. Responde via whatsappSender.sendMessage()
+//   5. Carrega histórico de conversa do usuário (memória)
+//   6. Detecta análise de meta financeira (palavras-chave)
+//   7. Chama groqParser.parseMessage() com histórico de contexto
+//   8. Roteia pelo intent → executa operação no banco
+//   9. Salva mensagem do usuário + resposta no histórico
+//  10. Responde via whatsappSender.sendMessage()
 // ─────────────────────────────────────────────────────────
 const { query, queryWithUser, transaction } = require('../config/database')
-const { parseMessage }     = require('../services/groqParser')
-const { sendMessage }      = require('../services/whatsappSender')
-const { transcribeAudio }  = require('../services/whisperTranscriber')
+const { parseMessage }        = require('../services/groqParser')
+const { sendMessage }         = require('../services/whatsappSender')
+const { transcribeAudio }     = require('../services/whisperTranscriber')
+const { getHistory, saveMessage: saveHistory } = require('../services/conversationHistory')
 
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
@@ -305,6 +309,125 @@ async function handleConsultaEstoque(userId, parsed) {
   return `📦 Produtos encontrados:\n${lista}`
 }
 
+// ─────────────────────────────────────────────────────────
+// ANÁLISE PREDITIVA E DE METAS
+// ─────────────────────────────────────────────────────────
+
+// Palavras-chave que ativam a análise de metas
+const GOAL_KEYWORDS = [
+  'meta', 'chegar em', 'possível fechar', 'possivel fechar',
+  'projeção', 'projecao', 'quanto vou lucrar', 'quanto vou faturar',
+  '100k', '200k', '300k', '400k', '500k',
+]
+
+/**
+ * Retorna true se a mensagem contém palavras-chave de análise de metas.
+ */
+function detectaAnaliseMetaFinanceira(text) {
+  const lower = text.toLowerCase()
+  return GOAL_KEYWORDS.some(kw => lower.includes(kw))
+}
+
+/**
+ * Extrai o valor numérico de uma meta mencionada na mensagem.
+ * Suporta formatos: "100k", "R$ 50.000", "200.000", "50000"
+ */
+function extrairMetaValor(text) {
+  // Formato "NUMk" ex: 100k, 50k
+  const kMatch = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i)
+  if (kMatch) return parseFloat(kMatch[1].replace(',', '.')) * 1000
+
+  // Formato "R$ 100.000" ou "100.000,00"
+  const reaisMatch = text.match(/R\$?\s*([\d.]+(?:,\d{1,2})?)/i)
+  if (reaisMatch) {
+    const raw = reaisMatch[1].replace(/\./g, '').replace(',', '.')
+    const val = parseFloat(raw)
+    if (!isNaN(val) && val > 0) return val
+  }
+
+  // Número puro com 4+ dígitos (ex: 50000)
+  const numMatch = text.match(/\b(\d{4,})\b/)
+  if (numMatch) return parseFloat(numMatch[1])
+
+  return null
+}
+
+/**
+ * Busca dados financeiros do mês atual e calcula projeção + comparação com meta.
+ */
+async function handleAnaliseMetaFinanceira(userId, messageText) {
+  const hoje        = new Date()
+  const ano         = hoje.getFullYear()
+  const mes         = hoje.getMonth()
+  const diaAtual    = hoje.getDate()
+  const diasNoMes   = new Date(ano, mes + 1, 0).getDate()
+  const diasRestantes = diasNoMes - diaAtual
+
+  const inicioMes = new Date(ano, mes, 1)
+  const fimMes    = new Date(ano, mes + 1, 0, 23, 59, 59)
+
+  const [vendasRes, despesasRes] = await Promise.all([
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicioMes, fimMes]
+    ),
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicioMes, fimMes]
+    ),
+  ])
+
+  const receita    = parseFloat(vendasRes.rows[0].total)
+  const custos     = parseFloat(despesasRes.rows[0].total)
+  const lucroAtual = receita - custos
+
+  // Projeção proporcional: (lucro_atual / dias_passados) * dias_totais_mes
+  const lucroProjetado   = diaAtual > 0 ? (lucroAtual / diaAtual) * diasNoMes : 0
+  const receitaProjetada = diaAtual > 0 ? (receita / diaAtual) * diasNoMes : 0
+
+  const nomeMes   = hoje.toLocaleString('pt-BR', { month: 'long' })
+  const metaValor = extrairMetaValor(messageText)
+
+  if (!metaValor) {
+    // Sem meta específica — exibe só a projeção
+    return (
+      `📊 *Projeção para ${nomeMes}*\n\n` +
+      `Dia ${diaAtual}/${diasNoMes} — ${diasRestantes} dias restantes\n\n` +
+      `Acumulado até agora:\n` +
+      `• Receita: ${fmt(receita)}\n` +
+      `• Despesas: ${fmt(custos)}\n` +
+      `• Lucro: *${fmt(lucroAtual)}*\n\n` +
+      `Projeção para o mês completo:\n` +
+      `• Receita: ${fmt(receitaProjetada)}\n` +
+      `• Lucro: *${fmt(lucroProjetado)}*`
+    )
+  }
+
+  if (lucroProjetado >= metaValor) {
+    const excedente = lucroProjetado - metaValor
+    return (
+      `🚀 *Projeção para ${nomeMes}*\n\n` +
+      `Você está no dia ${diaAtual} com *${fmt(lucroAtual)}* de lucro. ` +
+      `Sua projeção para o mês é *${fmt(lucroProjetado)}*, ` +
+      `então já vai superar sua meta de *${fmt(metaValor)}*! Continue assim! 🎉\n\n` +
+      `Vai superar em *${fmt(excedente)}* acima da meta.`
+    )
+  }
+
+  // Ritmo atual insuficiente — calcula quanto precisa por dia
+  const lucroNecessario = metaValor - lucroAtual
+  const porDia = diasRestantes > 0 ? lucroNecessario / diasRestantes : lucroNecessario
+
+  return (
+    `📊 *Projeção para ${nomeMes}*\n\n` +
+    `Você está no dia ${diaAtual} com *${fmt(lucroAtual)}* de lucro.\n` +
+    `Sua projeção atual é *${fmt(lucroProjetado)}*, mas sua meta é *${fmt(metaValor)}*.\n\n` +
+    `Para atingir a meta, você precisa gerar *${fmt(porDia)}/dia* nos próximos ${diasRestantes} dias. Vamos lá! 💪`
+  )
+}
+
 async function handleConsultaLucro(userId, periodo) {
   const { inicio, fim, label } = resolverPeriodo(periodo)
 
@@ -452,64 +575,93 @@ const handleWebhook = async (req, res) => {
       console.log('[WHATSAPP] Tipo: TEXTO —', messageText)
     }
 
-    let parsed
+    // ── Carrega histórico de conversa (memória) ─────────────
+    let history = []
     try {
-      parsed = await parseMessage(messageText)
-      console.log('[WHATSAPP] parsed:', parsed)
+      history = await getHistory(userId, phoneNorm)
+      console.log('[WHATSAPP] histórico carregado:', history.length, 'mensagens')
     } catch (err) {
-      console.error('[WHATSAPP] Erro no Groq parser:', err.message)
-      await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
-      return
-    }
-
-    if (!parsed || !parsed.tipo) {
-      console.log('[WHATSAPP] parsed inválido')
-      await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
-      return
+      console.warn('[WHATSAPP] Falha ao carregar histórico (continuando sem):', err.message)
     }
 
     let resposta
 
-    try {
-      switch (parsed.tipo) {
-        case 'despesa':
-          resposta = await handleDespesa(userId, parsed)
-          break
-
-        case 'venda':
-          resposta = await handleVenda(userId, parsed)
-          break
-
-        case 'consulta_estoque':
-          resposta = await handleConsultaEstoque(userId, parsed)
-          break
-
-        case 'estoque_entrada':
-          resposta = await handleEstoqueEntrada(userId, parsed)
-          break
-
-        case 'estoque_saida':
-          resposta = await handleEstoqueSaida(userId, parsed)
-          break
-
-        case 'consulta_financeira':
-          if (parsed.metrica === 'lucro') {
-            resposta = await handleConsultaLucro(userId, parsed.periodo)
-          } else {
-            resposta = MSG_AJUDA
-          }
-          break
-
-        case 'conversa':
-          resposta = parsed.resposta || MSG_ERRO_IA
-          break
-
-        default:
-          resposta = MSG_AJUDA
+    // ── Detecção de análise de metas (Melhoria 2) ───────────
+    if (detectaAnaliseMetaFinanceira(messageText)) {
+      console.log('[WHATSAPP] Detectado pedido de análise de meta financeira')
+      try {
+        resposta = await handleAnaliseMetaFinanceira(userId, messageText)
+      } catch (err) {
+        console.error('[WHATSAPP] Erro na análise de meta:', err.message)
+        resposta = '❌ Não consegui calcular a projeção agora. Tente novamente.'
       }
+    } else {
+      // ── Parser Groq com contexto de histórico (Melhoria 1) ─
+      let parsed
+      try {
+        parsed = await parseMessage(messageText, history)
+        console.log('[WHATSAPP] parsed:', parsed)
+      } catch (err) {
+        console.error('[WHATSAPP] Erro no Groq parser:', err.message)
+        await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
+        return
+      }
+
+      if (!parsed || !parsed.tipo) {
+        console.log('[WHATSAPP] parsed inválido')
+        await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
+        return
+      }
+
+      try {
+        switch (parsed.tipo) {
+          case 'despesa':
+            resposta = await handleDespesa(userId, parsed)
+            break
+
+          case 'venda':
+            resposta = await handleVenda(userId, parsed)
+            break
+
+          case 'consulta_estoque':
+            resposta = await handleConsultaEstoque(userId, parsed)
+            break
+
+          case 'estoque_entrada':
+            resposta = await handleEstoqueEntrada(userId, parsed)
+            break
+
+          case 'estoque_saida':
+            resposta = await handleEstoqueSaida(userId, parsed)
+            break
+
+          case 'consulta_financeira':
+            if (parsed.metrica === 'lucro') {
+              resposta = await handleConsultaLucro(userId, parsed.periodo)
+            } else {
+              resposta = MSG_AJUDA
+            }
+            break
+
+          case 'conversa':
+            resposta = parsed.resposta || MSG_ERRO_IA
+            break
+
+          default:
+            resposta = MSG_AJUDA
+        }
+      } catch (err) {
+        console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
+        resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
+      }
+    }
+
+    // ── Salva mensagem do usuário + resposta no histórico ───
+    try {
+      await saveHistory(userId, phoneNorm, 'user', messageText)
+      await saveHistory(userId, phoneNorm, 'assistant', resposta)
     } catch (err) {
-      console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
-      resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
+      console.warn('[WHATSAPP] Falha ao salvar histórico (não crítico):', err.message)
     }
 
     console.log('[WHATSAPP] enviando resposta para', phoneNorm, '(reply a', messageId, '):', resposta)
