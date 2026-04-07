@@ -82,6 +82,11 @@ Regras:
 - Se não for comando, responder normalmente em português brasileiro
 - Sempre use o nome da pessoa nas respostas conversacionais
 - Seja amigável, motivador e personalizado
+
+⚠️ REGRA DE TAMANHO — OBRIGATÓRIA:
+- Respostas conversacionais: máximo 3 linhas
+- Proibido: "lembre-se que", "é importante", "vale ressaltar", disclaimers
+- Direto ao ponto com os dados reais, tom motivador, nunca corporativo
 `
 
 // ── Fallback sem contexto de usuário ────────────────────
@@ -211,7 +216,9 @@ use esses dados para dar uma análise real e personalizada.`
 As mensagens podem vir de TEXTO ou TRANSCRIÇÃO DE ÁUDIO.
 A transcrição pode conter erros, palavras incompletas ou frases informais.
 
-Sua função é interpretar corretamente a intenção do usuário.`
+Sua função é interpretar corretamente a intenção do usuário.
+
+⚠️ REGRA DE TAMANHO — CRÍTICA: respostas conversacionais máximo 3 linhas. Sem disclaimers, sem "lembre-se que", sem "é importante registrar". Direto ao ponto com os dados reais. Tom motivador e amigável, nunca corporativo.`
 
   const fewShot = buildFewShotExamples(userContext)
 
