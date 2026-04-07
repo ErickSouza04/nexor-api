@@ -354,8 +354,9 @@ function extrairMetaValor(text) {
 
 /**
  * Busca dados financeiros do mês atual e calcula projeção + comparação com meta.
+ * storedMetaValor: meta cadastrada no perfil do usuário (fallback se não mencionar valor na mensagem)
  */
-async function handleAnaliseMetaFinanceira(userId, messageText) {
+async function handleAnaliseMetaFinanceira(userId, messageText, storedMetaValor = null) {
   const hoje        = new Date()
   const ano         = hoje.getFullYear()
   const mes         = hoje.getMonth()
@@ -388,7 +389,8 @@ async function handleAnaliseMetaFinanceira(userId, messageText) {
   const receitaProjetada = diaAtual > 0 ? (receita / diaAtual) * diasNoMes : 0
 
   const nomeMes   = hoje.toLocaleString('pt-BR', { month: 'long' })
-  const metaValor = extrairMetaValor(messageText)
+  // Prioridade: valor mencionado na mensagem > meta cadastrada no perfil
+  const metaValor = extrairMetaValor(messageText) || storedMetaValor
 
   if (!metaValor) {
     // Sem meta específica — exibe só a projeção
@@ -540,7 +542,7 @@ const handleWebhook = async (req, res) => {
     console.log('[WHATSAPP] userId:', userId)
 
     const userInfo = await query(
-      'SELECT nome, plan, ativo FROM usuarios WHERE id = $1',
+      'SELECT nome, plan, ativo, pro_labore, meta_lucro FROM usuarios WHERE id = $1',
       [userId]
     )
 
@@ -557,6 +559,69 @@ const handleWebhook = async (req, res) => {
       console.log('[WHATSAPP] Usuário sem plano plus')
       await sendMessage(phoneNorm, MSG_UPGRADE, messageId)
       return
+    }
+
+    // ── Carrega contexto do usuário: perfil + financeiro do mês ──
+    let userContext = null
+    try {
+      const hoje        = new Date()
+      const anoAtual    = hoje.getFullYear()
+      const mesAtual    = hoje.getMonth()         // 0-based
+      const mesNum      = mesAtual + 1            // 1-based para a tabela metas
+      const diaAtual    = hoje.getDate()
+      const diasNoMes   = new Date(anoAtual, mesAtual + 1, 0).getDate()
+      const inicioMes   = new Date(anoAtual, mesAtual, 1)
+      const fimMes      = new Date(anoAtual, mesAtual + 1, 0, 23, 59, 59)
+      const nomeMes     = hoje.toLocaleString('pt-BR', { month: 'long' })
+
+      const [metaRes, vendasMesRes, despesasMesRes] = await Promise.all([
+        queryWithUser(userId,
+          `SELECT valor_meta, pro_labore FROM metas WHERE user_id = $1 AND mes = $2 AND ano = $3 LIMIT 1`,
+          [userId, mesNum, anoAtual]
+        ).catch(() => ({ rows: [] })),
+        queryWithUser(userId,
+          `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+          [userId, inicioMes, fimMes]
+        ),
+        queryWithUser(userId,
+          `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+          [userId, inicioMes, fimMes]
+        ),
+      ])
+
+      const metaRow   = metaRes.rows[0]
+      // Prioridade: meta do mês na tabela metas > meta_lucro do usuário
+      const metaValor = metaRow?.valor_meta && parseFloat(metaRow.valor_meta) > 0
+        ? parseFloat(metaRow.valor_meta)
+        : (user.meta_lucro && parseFloat(user.meta_lucro) > 0 ? parseFloat(user.meta_lucro) : null)
+      // Prioridade: pro_labore da meta do mês > pro_labore do usuário
+      const proLabore = metaRow?.pro_labore && parseFloat(metaRow.pro_labore) > 0
+        ? parseFloat(metaRow.pro_labore)
+        : (user.pro_labore && parseFloat(user.pro_labore) > 0 ? parseFloat(user.pro_labore) : null)
+
+      const receita        = parseFloat(vendasMesRes.rows[0].total)
+      const despesas       = parseFloat(despesasMesRes.rows[0].total)
+      const lucro          = receita - despesas
+      const margem         = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
+      const lucroProjetado = diaAtual > 0 ? (lucro / diaAtual) * diasNoMes : 0
+
+      userContext = {
+        nome: user.nome,
+        proLabore,
+        metaValor,
+        receita,
+        despesas,
+        lucro,
+        margem,
+        diaAtual,
+        diasNoMes,
+        lucroProjetado,
+        nomeMes,
+        anoAtual,
+      }
+      console.log('[WHATSAPP] userContext:', { nome: user.nome, metaValor, receita, lucro, diaAtual, diasNoMes })
+    } catch (err) {
+      console.warn('[WHATSAPP] Falha ao carregar userContext (continuando sem):', err.message)
     }
 
     // ── Transcrição de áudio (Groq Whisper) se necessário ──
@@ -586,20 +651,20 @@ const handleWebhook = async (req, res) => {
 
     let resposta
 
-    // ── Detecção de análise de metas (Melhoria 2) ───────────
+    // ── Detecção de análise de metas ────────────────────────
     if (detectaAnaliseMetaFinanceira(messageText)) {
       console.log('[WHATSAPP] Detectado pedido de análise de meta financeira')
       try {
-        resposta = await handleAnaliseMetaFinanceira(userId, messageText)
+        resposta = await handleAnaliseMetaFinanceira(userId, messageText, userContext?.metaValor)
       } catch (err) {
         console.error('[WHATSAPP] Erro na análise de meta:', err.message)
         resposta = '❌ Não consegui calcular a projeção agora. Tente novamente.'
       }
     } else {
-      // ── Parser Groq com contexto de histórico (Melhoria 1) ─
+      // ── Parser Groq com contexto de histórico + perfil do usuário ─
       let parsed
       try {
-        parsed = await parseMessage(messageText, history)
+        parsed = await parseMessage(messageText, history, userContext)
         console.log('[WHATSAPP] parsed:', parsed)
       } catch (err) {
         console.error('[WHATSAPP] Erro no Groq parser:', err.message)
