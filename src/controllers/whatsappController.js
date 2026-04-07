@@ -328,6 +328,57 @@ function detectaAnaliseMetaFinanceira(text) {
   return GOAL_KEYWORDS.some(kw => lower.includes(kw))
 }
 
+// Métricas financeiras que indicam consulta direta
+const METRICAS_CONSULTA = [
+  'lucro', 'lucrei', 'receita', 'faturamento', 'faturei',
+  'despesas', 'gastos', 'gastei', 'resultado', 'balanço', 'balanco',
+]
+
+// Mapeamento de período (mais específico primeiro para evitar submatch)
+const PERIODOS_MAPA = [
+  [/\bessa\s+semana\b|\beste\s+semana\b|\besta\s+semana\b/,    'semana'],
+  [/\besse\s+m[eê]s\b|\beste\s+m[eê]s\b|\bno\s+m[eê]s\b|\bdo\s+m[eê]s\b|\bdesse\s+m[eê]s\b/, 'mes'],
+  [/\bontem\b/,  'ontem'],
+  [/\bhoje\b/,   'hoje'],
+  [/\bsemana\b/, 'semana'],
+  [/\bm[eê]s\b/, 'mes'],
+]
+
+/**
+ * Detecta consulta financeira direta de período e retorna o período, ou null.
+ * Bypassa o Groq — consultas diretas nunca passam pelo LLM.
+ */
+function detectaConsultaFinanceiraDireta(text) {
+  const lower = text.toLowerCase()
+
+  // Padrão "como foi/está/estou [período]"
+  if (/\bcomo\s+(?:foi|foram|t[aá]|est[aá]|estou|ando)\b/.test(lower)) {
+    for (const [re, periodo] of PERIODOS_MAPA) {
+      if (re.test(lower)) return periodo
+    }
+  }
+
+  // Padrão "ver/mostrar/quero ver [meu] [métrica]" com período
+  if (/\b(?:ver|mostr[ae]r?|quero\s+ver|me\s+mostr[ae])\b/.test(lower)) {
+    const temMetrica = METRICAS_CONSULTA.some(m => lower.includes(m))
+    if (temMetrica) {
+      for (const [re, periodo] of PERIODOS_MAPA) {
+        if (re.test(lower)) return periodo
+      }
+    }
+  }
+
+  // Padrão geral: [métrica] + [período]
+  const temMetrica = METRICAS_CONSULTA.some(m => lower.includes(m))
+  if (!temMetrica) return null
+
+  for (const [re, periodo] of PERIODOS_MAPA) {
+    if (re.test(lower)) return periodo
+  }
+
+  return null
+}
+
 /**
  * Extrai o valor numérico de uma meta mencionada na mensagem.
  * Suporta formatos: "100k", "R$ 50.000", "200.000", "50000"
@@ -660,6 +711,18 @@ const handleWebhook = async (req, res) => {
         console.error('[WHATSAPP] Erro na análise de meta:', err.message)
         resposta = '❌ Não consegui calcular a projeção agora. Tente novamente.'
       }
+
+    // ── Detecção de consulta financeira direta (bypassa Groq) ──
+    } else if (detectaConsultaFinanceiraDireta(messageText)) {
+      const periodo = detectaConsultaFinanceiraDireta(messageText)
+      console.log('[WHATSAPP] Consulta financeira direta detectada — período:', periodo)
+      try {
+        resposta = await handleConsultaLucro(userId, periodo)
+      } catch (err) {
+        console.error('[WHATSAPP] Erro na consulta financeira direta:', err.message)
+        resposta = '❌ Não consegui buscar os dados agora. Tente novamente.'
+      }
+
     } else {
       // ── Parser Groq com contexto de histórico + perfil do usuário ─
       let parsed
@@ -701,11 +764,7 @@ const handleWebhook = async (req, res) => {
             break
 
           case 'consulta_financeira':
-            if (parsed.metrica === 'lucro') {
-              resposta = await handleConsultaLucro(userId, parsed.periodo)
-            } else {
-              resposta = MSG_AJUDA
-            }
+            resposta = await handleConsultaLucro(userId, parsed.periodo || 'mes')
             break
 
           case 'conversa':
