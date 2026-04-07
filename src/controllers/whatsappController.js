@@ -33,6 +33,48 @@ function resolverData(data) {
   return data  // assume ISO YYYY-MM-DD
 }
 
+// ── Converte periodo para { inicio, fim, label } ─────────
+function resolverPeriodo(periodo) {
+  const hoje = new Date()
+  const ano  = hoje.getFullYear()
+  const mes  = hoje.getMonth()
+  const dia  = hoje.getDate()
+
+  switch (periodo) {
+    case 'hoje':
+      return {
+        inicio: new Date(ano, mes, dia, 0, 0, 0),
+        fim:    new Date(ano, mes, dia, 23, 59, 59),
+        label:  'hoje'
+      }
+    case 'ontem':
+      return {
+        inicio: new Date(ano, mes, dia - 1, 0, 0, 0),
+        fim:    new Date(ano, mes, dia - 1, 23, 59, 59),
+        label:  'ontem'
+      }
+    case 'semana':
+    case 'essa_semana':
+    case 'esta_semana': {
+      const inicioSemana = new Date(ano, mes, dia - hoje.getDay())
+      inicioSemana.setHours(0, 0, 0, 0)
+      return { inicio: inicioSemana, fim: hoje, label: 'semana atual' }
+    }
+    case 'mes_passado':
+      return {
+        inicio: new Date(ano, mes - 1, 1),
+        fim:    new Date(ano, mes, 0, 23, 59, 59),
+        label:  'mês passado'
+      }
+    default: // 'mes', 'este_mes', qualquer outro
+      return {
+        inicio: new Date(ano, mes, 1),
+        fim:    new Date(ano, mes + 1, 0, 23, 59, 59),
+        label:  new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
+      }
+  }
+}
+
 // ── Formata valor monetário ───────────────────────────────
 function fmt(valor) {
   return 'R$ ' + parseFloat(valor).toFixed(2).replace('.', ',')
@@ -263,30 +305,29 @@ async function handleConsultaEstoque(userId, parsed) {
   return `📦 Produtos encontrados:\n${lista}`
 }
 
-async function handleConsultaLucro(userId) {
-  const mes = new Date().getMonth() + 1
-  const ano = new Date().getFullYear()
+async function handleConsultaLucro(userId, periodo) {
+  const { inicio, fim, label } = resolverPeriodo(periodo)
 
   const [vendas, despesas] = await Promise.all([
     queryWithUser(userId,
       `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
-       WHERE user_id = $1 AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`,
-      [userId, mes, ano]
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicio, fim]
     ),
     queryWithUser(userId,
       `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
-       WHERE user_id = $1 AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`,
-      [userId, mes, ano]
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicio, fim]
     ),
   ])
 
-  const receita  = parseFloat(vendas.rows[0].total)
-  const custos   = parseFloat(despesas.rows[0].total)
-  const lucro    = receita - custos
-  const margem   = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
-  const emoji    = lucro >= 0 ? '💰' : '⚠️'
+  const receita = parseFloat(vendas.rows[0].total)
+  const custos  = parseFloat(despesas.rows[0].total)
+  const lucro   = receita - custos
+  const margem  = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
+  const emoji   = lucro >= 0 ? '💰' : '⚠️'
 
-  return `${emoji} *${nomeMesAtual()}/${ano}*\nReceita: ${fmt(receita)}\nDespesas: ${fmt(custos)}\nLucro: *${fmt(lucro)}* (margem ${margem}%)`
+  return `${emoji} *${label}*\nReceita: ${fmt(receita)}\nDespesas: ${fmt(custos)}\nLucro: *${fmt(lucro)}* (margem ${margem}%)`
 }
 
 // ─────────────────────────────────────────────────────────
@@ -453,7 +494,7 @@ const handleWebhook = async (req, res) => {
 
         case 'consulta_financeira':
           if (parsed.metrica === 'lucro') {
-            resposta = await handleConsultaLucro(userId)
+            resposta = await handleConsultaLucro(userId, parsed.periodo)
           } else {
             resposta = MSG_AJUDA
           }
