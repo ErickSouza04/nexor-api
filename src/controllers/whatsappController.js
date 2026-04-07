@@ -118,9 +118,73 @@ function resolverPeriodo(periodo) {
   }
 }
 
-// ── Formata valor monetário ───────────────────────────────
+// ── Formata valor monetário com separador de milhar ─────
 function fmt(valor) {
-  return 'R$ ' + parseFloat(valor).toFixed(2).replace('.', ',')
+  return 'R$ ' + parseFloat(valor || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+// ── Busca receita/despesas/lucro do dia para o usuário ──
+async function buscarLucroDia(userId) {
+  const hoje   = new Date()
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0)
+  const fim    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59)
+
+  const [vendasRes, despesasRes] = await Promise.all([
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicio, fim]
+    ),
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicio, fim]
+    ),
+  ])
+
+  const receita  = parseFloat(vendasRes.rows[0].total)
+  const despesas = parseFloat(despesasRes.rows[0].total)
+  const lucro    = receita - despesas
+  const margem   = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
+
+  return { receita, despesas, lucro, margem: parseFloat(margem) }
+}
+
+// ── Busca lucro de ontem (para comparação de crescimento) ─
+async function buscarLucroOntem(userId) {
+  const hoje   = new Date()
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1, 0, 0, 0)
+  const fim    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1, 23, 59, 59)
+
+  const [vendasRes, despesasRes] = await Promise.all([
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicio, fim]
+    ),
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
+       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+      [userId, inicio, fim]
+    ),
+  ])
+
+  return parseFloat(vendasRes.rows[0].total) - parseFloat(despesasRes.rows[0].total)
+}
+
+// ── Gera frase motivacional baseada no desempenho ────────
+// margem         : margem % do período consultado
+// percentualMeta : % da meta mensal já atingida (pode ser null)
+// lucroCrescendo : lucro atual maior que período anterior
+function gerarFraseMotivacional({ margem = 0, percentualMeta = null, lucroCrescendo = false } = {}) {
+  if (margem > 80)                                    return 'Você está voando! Continue assim! 💪'
+  if (lucroCrescendo)                                 return 'Melhor que ontem! Bom ritmo 🔥'
+  if (percentualMeta !== null && percentualMeta > 70) return 'Meta batida! Agora é superar 🚀'
+  if (percentualMeta !== null && percentualMeta >= 30) return 'Quase lá! Falta pouco pra bater a meta 🎯'
+  return 'Dia tranquilo, amanhã tem mais! 😊'
 }
 
 // ── Nome do mês atual em PT-BR ───────────────────────────
@@ -133,7 +197,7 @@ function nomeMesAtual() {
 // Todos recebem (userId, parsed) e retornam string de resposta
 // ─────────────────────────────────────────────────────────
 
-async function handleDespesa(userId, parsed) {
+async function handleDespesa(userId, parsed, userContext) {
   if (!parsed.valor) {
     return '❓ Quanto foi a despesa? Tente: *Paguei R$ 50 de embalagem*'
   }
@@ -150,11 +214,35 @@ async function handleDespesa(userId, parsed) {
       data,
     ]
   )
-  const desc = parsed.produto ? ` (${parsed.produto})` : ''
-  return `✅ Despesa de ${fmt(parsed.valor)}${desc} registrada!`
+
+  const dia         = await buscarLucroDia(userId)
+  const lucroOntem  = await buscarLucroOntem(userId)
+  const percentualMeta = userContext?.metaValor
+    ? (userContext.lucro / userContext.metaValor) * 100
+    : null
+
+  const frase = gerarFraseMotivacional({
+    margem: dia.margem,
+    percentualMeta,
+    lucroCrescendo: dia.lucro > lucroOntem,
+  })
+
+  const desc = parsed.produto || parsed.descricao || 'Despesa'
+
+  return [
+    '✅ Despesa registrada!',
+    `💸 ${desc}: ${fmt(parsed.valor)}`,
+    '',
+    '📊 Lucro do dia:',
+    `Receita: ${fmt(dia.receita)}`,
+    `Despesas: ${fmt(dia.despesas)}`,
+    `Lucro: ${fmt(dia.lucro)} (margem ${dia.margem}%)`,
+    '',
+    frase,
+  ].join('\n')
 }
 
-async function handleVenda(userId, parsed) {
+async function handleVenda(userId, parsed, userContext) {
   if (!parsed.valor) {
     return '❓ Qual foi o valor da venda? Tente: *Vendi 3 bolos por R$ 30*'
   }
@@ -171,8 +259,32 @@ async function handleVenda(userId, parsed) {
       data,
     ]
   )
-  const prod = parsed.produto ? ` de ${parsed.produto}` : ''
-  return `✅ Venda${prod} de ${fmt(parsed.valor)} registrada!`
+
+  const dia         = await buscarLucroDia(userId)
+  const lucroOntem  = await buscarLucroOntem(userId)
+  const percentualMeta = userContext?.metaValor
+    ? (userContext.lucro / userContext.metaValor) * 100
+    : null
+
+  const frase = gerarFraseMotivacional({
+    margem: dia.margem,
+    percentualMeta,
+    lucroCrescendo: dia.lucro > lucroOntem,
+  })
+
+  const desc = parsed.produto || parsed.descricao || 'Venda'
+
+  return [
+    '✅ Venda registrada!',
+    `💰 ${desc}: ${fmt(parsed.valor)}`,
+    '',
+    '📊 Lucro do dia:',
+    `Receita: ${fmt(dia.receita)}`,
+    `Despesas: ${fmt(dia.despesas)}`,
+    `Lucro: ${fmt(dia.lucro)} (margem ${dia.margem}%)`,
+    '',
+    frase,
+  ].join('\n')
 }
 
 async function handleEstoqueEntrada(userId, parsed) {
@@ -469,7 +581,7 @@ async function handleAnaliseMetaFinanceira(userId, messageText, storedMetaValor 
   )
 }
 
-async function handleConsultaLucro(userId, periodo) {
+async function handleConsultaLucro(userId, periodo, userContext) {
   const { inicio, fim, label } = resolverPeriodo(periodo)
 
   const [vendas, despesas] = await Promise.all([
@@ -489,9 +601,33 @@ async function handleConsultaLucro(userId, periodo) {
   const custos  = parseFloat(despesas.rows[0].total)
   const lucro   = receita - custos
   const margem  = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
-  const emoji   = lucro >= 0 ? '💰' : '⚠️'
 
-  return `${emoji} *${label}*\nReceita: ${fmt(receita)}\nDespesas: ${fmt(custos)}\nLucro: *${fmt(lucro)}* (margem ${margem}%)`
+  // Compara com período anterior para detectar crescimento
+  let lucroCrescendo = false
+  if (periodo === 'hoje' || !periodo) {
+    const lucroOntem = await buscarLucroOntem(userId)
+    lucroCrescendo = lucro > lucroOntem
+  }
+
+  // Percentual da meta mensal já atingida (usa dados mensais do contexto)
+  const percentualMeta = userContext?.metaValor
+    ? (userContext.lucro / userContext.metaValor) * 100
+    : null
+
+  const frase = gerarFraseMotivacional({
+    margem: parseFloat(margem),
+    percentualMeta,
+    lucroCrescendo,
+  })
+
+  return [
+    `💰 ${label}`,
+    `Receita: ${fmt(receita)}`,
+    `Despesas: ${fmt(custos)}`,
+    `Lucro: ${fmt(lucro)} (margem ${margem}%)`,
+    '',
+    frase,
+  ].join('\n')
 }
 
 // ─────────────────────────────────────────────────────────
@@ -733,11 +869,11 @@ const handleWebhook = async (req, res) => {
       try {
         switch (parsed.tipo) {
           case 'despesa':
-            resposta = await handleDespesa(userId, parsed)
+            resposta = await handleDespesa(userId, parsed, userContext)
             break
 
           case 'venda':
-            resposta = await handleVenda(userId, parsed)
+            resposta = await handleVenda(userId, parsed, userContext)
             break
 
           case 'consulta_estoque':
@@ -754,7 +890,7 @@ const handleWebhook = async (req, res) => {
 
           case 'consulta_financeira':
             if (parsed.metrica === 'lucro') {
-              resposta = await handleConsultaLucro(userId, parsed.periodo)
+              resposta = await handleConsultaLucro(userId, parsed.periodo, userContext)
             } else {
               resposta = inferirIntencaoFallback(messageText, userContext)
             }
