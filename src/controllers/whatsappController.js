@@ -19,6 +19,7 @@ const { parseMessage }        = require('../services/groqParser')
 const { sendMessage }         = require('../services/whatsappSender')
 const { transcribeAudio }     = require('../services/whisperTranscriber')
 const { getHistory, saveMessage: saveHistory } = require('../services/conversationHistory')
+const { detectWeakDayPattern } = require('../services/patternDetection')
 
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
@@ -622,6 +623,19 @@ const handleWebhook = async (req, res) => {
       console.log('[WHATSAPP] userContext:', { nome: user.nome, metaValor, receita, lucro, diaAtual, diasNoMes })
     } catch (err) {
       console.warn('[WHATSAPP] Falha ao carregar userContext (continuando sem):', err.message)
+    }
+
+    // ── Melhoria 3: Detecção de padrão de vendas por dia da semana ──
+    if (userContext) {
+      try {
+        const weakDayInsight = await detectWeakDayPattern(userId)
+        if (weakDayInsight) {
+          userContext.weakDayInsight = weakDayInsight
+          console.log('[WHATSAPP] Padrão de vendas detectado:', weakDayInsight.substring(0, 80) + '...')
+        }
+      } catch (err) {
+        console.warn('[WHATSAPP] Falha ao detectar padrão de vendas (continuando sem):', err.message)
+      }
     }
 
     // ── Transcrição de áudio (Groq Whisper) se necessário ──

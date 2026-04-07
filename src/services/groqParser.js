@@ -115,6 +115,7 @@ function buildSystemPrompt(userContext) {
     lucroProjetado,
     nomeMes,
     anoAtual,
+    weakDayInsight,
   } = userContext
 
   // ── Seção de perfil do usuário ──────────────────────
@@ -131,6 +132,11 @@ function buildSystemPrompt(userContext) {
   }
 
   perfil += `\nSempre use o nome da pessoa nas respostas. Faça análises personalizadas com base na meta e no contexto financeiro dela. Seja amigável, motivador e fale em português brasileiro.`
+
+  // ── Melhoria 3: insight de padrão semanal (se detectado) ─
+  if (weakDayInsight) {
+    perfil += `\n\n💡 Insight de padrão de vendas: ${weakDayInsight}`
+  }
 
   // ── Seção de situação financeira do mês ─────────────
   const margemStr   = receita > 0 ? ((lucro / receita) * 100).toFixed(1) + '%' : '0%'
