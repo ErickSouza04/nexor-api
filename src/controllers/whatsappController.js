@@ -9,12 +9,17 @@
 //   4. Verifica plano 'plus'
 //   5. Chama groqParser.parseMessage()
 //   6. Roteia pelo intent → executa operação no banco
+//      (comandos de registro → handlers diretos)
+//      (mensagens livres  → modo conselheiro financeiro via LLaMA)
 //   7. Responde via whatsappSender.sendMessage()
 // ─────────────────────────────────────────────────────────
 const { query, queryWithUser, transaction } = require('../config/database')
 const { parseMessage }     = require('../services/groqParser')
 const { sendMessage }      = require('../services/whatsappSender')
 const { transcribeAudio }  = require('../services/whisperTranscriber')
+
+const fetch    = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
@@ -290,6 +295,129 @@ async function handleConsultaLucro(userId) {
 }
 
 // ─────────────────────────────────────────────────────────
+// MODO CONSELHEIRO FINANCEIRO
+// Acionado para qualquer mensagem que não seja comando de registro
+// ─────────────────────────────────────────────────────────
+async function handleConselheiroFinanceiro(userId, userName, messageText) {
+  const now = new Date()
+  const mes = now.getMonth() + 1
+  const ano = now.getFullYear()
+
+  const [vendasRes, despesasRes, topProdutosRes, perfilRes, metaMesRes] = await Promise.all([
+    // Faturamento do mês
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total
+       FROM vendas
+       WHERE user_id = $1
+         AND EXTRACT(MONTH FROM data) = $2
+         AND EXTRACT(YEAR  FROM data) = $3`,
+      [userId, mes, ano]
+    ),
+    // Despesas do mês
+    queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor), 0) AS total
+       FROM despesas
+       WHERE user_id = $1
+         AND EXTRACT(MONTH FROM data) = $2
+         AND EXTRACT(YEAR  FROM data) = $3`,
+      [userId, mes, ano]
+    ),
+    // Top 3 produtos mais vendidos no mês
+    queryWithUser(userId,
+      `SELECT produto, COUNT(*) AS qtd, SUM(valor) AS receita
+       FROM vendas
+       WHERE user_id = $1
+         AND EXTRACT(MONTH FROM data) = $2
+         AND EXTRACT(YEAR  FROM data) = $3
+         AND produto IS NOT NULL
+       GROUP BY produto
+       ORDER BY qtd DESC
+       LIMIT 3`,
+      [userId, mes, ano]
+    ),
+    // Meta e pró-labore do perfil base do usuário
+    query(
+      `SELECT meta_lucro, pro_labore FROM usuarios WHERE id = $1`,
+      [userId]
+    ),
+    // Meta e pró-labore específicos do mês (tabela metas), se existir
+    queryWithUser(userId,
+      `SELECT valor_meta, pro_labore
+       FROM metas
+       WHERE user_id = $1 AND mes = $2 AND ano = $3
+       LIMIT 1`,
+      [userId, mes, ano]
+    ),
+  ])
+
+  const faturamento   = parseFloat(vendasRes.rows[0].total)
+  const totalDespesas = parseFloat(despesasRes.rows[0].total)
+
+  // Pró-labore: prioriza tabela metas do mês, fallback para perfil do usuário
+  const prolabore = parseFloat(
+    metaMesRes.rows[0]?.pro_labore ?? perfilRes.rows[0]?.pro_labore ?? 0
+  )
+  // Meta: prioriza tabela metas do mês, fallback para meta_lucro do perfil
+  const metaValor = parseFloat(
+    metaMesRes.rows[0]?.valor_meta ?? perfilRes.rows[0]?.meta_lucro ?? 0
+  )
+
+  const lucroReal = faturamento - totalDespesas - prolabore
+
+  const produtos = topProdutosRes.rows
+    .map(p => `${p.produto} (${p.qtd}x — R$${parseFloat(p.receita).toFixed(2)})`)
+    .join(', ') || 'nenhum registrado'
+
+  const systemPrompt = `Você é o assistente financeiro pessoal de ${userName}, micro-empreendedor brasileiro usuário do Nexor.
+
+DADOS REAIS DO NEGÓCIO DELE ESTE MÊS:
+- Faturamento: R$ ${faturamento.toFixed(2)}
+- Despesas: R$ ${totalDespesas.toFixed(2)}
+- Pró-labore (salário do dono): R$ ${prolabore.toFixed(2)}
+- Lucro real: R$ ${lucroReal.toFixed(2)}
+- Meta do mês: R$ ${metaValor.toFixed(2)}
+- Produtos/serviços mais vendidos: ${produtos}
+
+Responda qualquer pergunta sobre o negócio dele usando esses dados reais.
+Seja direto e prático, como um contador amigo que conhece os números dele.
+IMPORTANTE:
+- Máximo 3 parágrafos curtos — é resposta de WhatsApp, não relatório
+- Use os dados reais para personalizar, nunca dê conselho genérico
+- Se não tiver dados suficientes para responder, diga o que falta registrar
+- Fale em português brasileiro informal
+- Não use markdown, asteriscos ou formatação — texto simples`
+
+  const controller = new AbortController()
+  const timeout    = setTimeout(() => controller.abort(), 20000)
+
+  try {
+    const response = await fetch(GROQ_URL, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer ' + process.env.GROQ_API_KEY,
+      },
+      body: JSON.stringify({
+        model:       'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: messageText  },
+        ],
+        max_tokens:  300,
+        temperature: 0.7,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error?.message || 'Groq API error')
+    return data.choices?.[0]?.message?.content || MSG_ERRO_IA
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // WEBHOOK PRINCIPAL
 // ─────────────────────────────────────────────────────────
 const handleWebhook = async (req, res) => {
@@ -429,42 +557,50 @@ const handleWebhook = async (req, res) => {
 
     let resposta
 
+    // ── Intents de registro → handlers diretos ─────────────
+    const REGISTRO_INTENTS = new Set([
+      'venda', 'despesa',
+      'estoque_entrada', 'estoque_saida', 'consulta_estoque',
+      'consulta_financeira',
+    ])
+
     try {
-      switch (parsed.tipo) {
-        case 'despesa':
-          resposta = await handleDespesa(userId, parsed)
-          break
+      if (REGISTRO_INTENTS.has(parsed.tipo)) {
+        // ── Fluxo de registro / consulta estruturada ───────
+        switch (parsed.tipo) {
+          case 'despesa':
+            resposta = await handleDespesa(userId, parsed)
+            break
 
-        case 'venda':
-          resposta = await handleVenda(userId, parsed)
-          break
+          case 'venda':
+            resposta = await handleVenda(userId, parsed)
+            break
 
-        case 'consulta_estoque':
-          resposta = await handleConsultaEstoque(userId, parsed)
-          break
+          case 'consulta_estoque':
+            resposta = await handleConsultaEstoque(userId, parsed)
+            break
 
-        case 'estoque_entrada':
-          resposta = await handleEstoqueEntrada(userId, parsed)
-          break
+          case 'estoque_entrada':
+            resposta = await handleEstoqueEntrada(userId, parsed)
+            break
 
-        case 'estoque_saida':
-          resposta = await handleEstoqueSaida(userId, parsed)
-          break
+          case 'estoque_saida':
+            resposta = await handleEstoqueSaida(userId, parsed)
+            break
 
-        case 'consulta_financeira':
-          if (parsed.metrica === 'lucro') {
-            resposta = await handleConsultaLucro(userId)
-          } else {
-            resposta = MSG_AJUDA
-          }
-          break
-
-        case 'conversa':
-          resposta = parsed.resposta || MSG_ERRO_IA
-          break
-
-        default:
-          resposta = MSG_AJUDA
+          case 'consulta_financeira':
+            if (parsed.metrica === 'lucro') {
+              resposta = await handleConsultaLucro(userId)
+            } else {
+              resposta = MSG_AJUDA
+            }
+            break
+        }
+      } else {
+        // ── Modo conselheiro financeiro ────────────────────
+        // Qualquer mensagem livre (conversa, dúvidas, pedidos de conselho, etc.)
+        console.log('[WHATSAPP] Modo conselheiro financeiro ativado para:', messageText)
+        resposta = await handleConselheiroFinanceiro(userId, user.nome, messageText)
       }
     } catch (err) {
       console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
