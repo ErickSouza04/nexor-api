@@ -339,11 +339,18 @@ const handleWebhook = async (req, res) => {
       return
     }
 
-    // ── Normaliza phone para formato brasileiro 55XXXXXXXXXX ─
+    // ── Normaliza phone para formato brasileiro 55DDD9XXXXXXXX ─
+    // Garante o nono dígito: Z-API pode enviar 556184890294 (12 dígitos)
+    // mas o número foi cadastrado como 5561984890294 (13 dígitos).
     const normalizePhone = (value = '') => {
       const cleaned = String(value).replace(/\D/g, '')
       if (!cleaned) return ''
-      return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+      const withCC = cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+      // 55 + DDD(2) + número(8) = 12 dígitos → injeta o 9 antes dos 8 dígitos finais
+      if (withCC.length === 12) {
+        return withCC.slice(0, 4) + '9' + withCC.slice(4)
+      }
+      return withCC
     }
 
     const phoneNorm = normalizePhone(phone)
@@ -351,10 +358,6 @@ const handleWebhook = async (req, res) => {
 
     // ── Busca userId pelo número cadastrado ─────────────────
     console.log('[WHATSAPP] buscando vínculo para:', phoneNorm)
-
-    // [DEBUG TEMPORÁRIO] dump de todos os registros em user_phones
-    const todos = await query('SELECT * FROM user_phones LIMIT 10')
-    console.log('[DEBUG] todos os vínculos:', JSON.stringify(todos.rows))
 
     const phoneResult = await query(
       'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
