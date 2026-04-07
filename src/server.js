@@ -10,6 +10,7 @@ const cors        = require('cors')
 const rateLimit   = require('express-rate-limit')
 const routes      = require('./routes')
 const { pool }    = require('./config/database')
+const { initCronJobs } = require('./jobs/proactiveAlerts')
 
 // ── Auto-migração: garante colunas essenciais no banco ───
 async function runMigrations() {
@@ -188,6 +189,7 @@ const server = app.listen(PORT, async () => {
   ╚══════════════════════════════════════╝
   `)
   await runMigrations()
+  initCronJobs()
 })
 
 // ── GRACEFUL SHUTDOWN ─────────────────────────────────────
