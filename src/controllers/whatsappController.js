@@ -24,8 +24,46 @@ const { detectWeakDayPattern } = require('../services/patternDetection')
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
 const MSG_UPGRADE  = '📊 O assistente via WhatsApp é exclusivo do Plano Plus. Acesse o app Nexor para fazer upgrade.'
-const MSG_ERRO_IA  = '🤖 Não consegui entender sua mensagem agora. Tente reformular ou acesse o app Nexor.'
-const MSG_AJUDA    = '🤖 Não entendi. Tente assim:\n• *Vendi 3 salgados por R$ 15*\n• *Paguei R$ 50 de embalagem*\n• *Comprei 5kg de farinha para o estoque*\n• *Quanto tenho de farinha?*\n• *Qual meu lucro este mês?*'
+
+// ── Fallback inteligente: infere intenção por palavras-chave ─
+function inferirIntencaoFallback(messageText, userContext) {
+  const nome      = userContext?.nome || ''
+  const sufixo    = nome ? `, ${nome}` : ''
+  const msg       = (messageText || '').toLowerCase().trim()
+
+  // Pergunta sobre valor / lucro sem mais contexto
+  if (/^quanto\?*\.?$|quanto (é|e|tá|ta|tenho|ganhei|foi)/.test(msg)) {
+    return `Você quer saber seu lucro de hoje${sufixo}? 😊`
+  }
+
+  // Referência a "ontem" sem verbo de registro
+  if (/\bontem\b/.test(msg) && !/vendi|gastei|paguei|comprei|recebi/.test(msg)) {
+    return `Quer ver o resumo de ontem${sufixo}?`
+  }
+
+  // Desânimo / resultado ruim
+  if (/\bruim\b|\btá mal\b|\bta mal\b|\btô mal\b|\bto mal\b|\bpessim/.test(msg)) {
+    return `Entendi${sufixo}... quer ver seus números pra gente analisar juntos? 📊`
+  }
+
+  // Pergunta de desempenho geral
+  if (/\bbem\b|\bindindo\b|\bcomo (tô|to|estou|fui|foi)\b|\bfui bem\b/.test(msg)) {
+    return `Quer que eu mostre seu desempenho${sufixo}? 📈`
+  }
+
+  // Pedido de melhoria ou dica
+  if (/\bmelhor(ar|ando|ei)\b|\bdica\b|\bsugest|\bconselho/.test(msg)) {
+    return `O que você quer melhorar${sufixo}? Vendas, despesas ou estoque? 🎯`
+  }
+
+  // Saudação sem conteúdo financeiro
+  if (/^(oi|olá|ola|eai|e aí|e ai|boa|bom dia|boa tarde|boa noite|hey|salve)\b/.test(msg)) {
+    return `Oi${nome ? ` ${nome}` : ''}! 😊 Me conta o que aconteceu hoje nas vendas!`
+  }
+
+  // Redirect genérico amigável
+  return `Oi${nome ? ` ${nome}` : ''}! Estou aqui pra ajudar com suas finanças e estoque 😊 Me conta o que aconteceu hoje nas vendas!`
+}
 
 // ── Converte 'hoje'/'ontem' para ISO date string ─────────
 function resolverData(data) {
@@ -682,13 +720,13 @@ const handleWebhook = async (req, res) => {
         console.log('[WHATSAPP] parsed:', parsed)
       } catch (err) {
         console.error('[WHATSAPP] Erro no Groq parser:', err.message)
-        await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
+        await sendMessage(phoneNorm, inferirIntencaoFallback(messageText, userContext), messageId)
         return
       }
 
       if (!parsed || !parsed.tipo) {
         console.log('[WHATSAPP] parsed inválido')
-        await sendMessage(phoneNorm, MSG_ERRO_IA, messageId)
+        await sendMessage(phoneNorm, inferirIntencaoFallback(messageText, userContext), messageId)
         return
       }
 
@@ -718,16 +756,16 @@ const handleWebhook = async (req, res) => {
             if (parsed.metrica === 'lucro') {
               resposta = await handleConsultaLucro(userId, parsed.periodo)
             } else {
-              resposta = MSG_AJUDA
+              resposta = inferirIntencaoFallback(messageText, userContext)
             }
             break
 
           case 'conversa':
-            resposta = parsed.resposta || MSG_ERRO_IA
+            resposta = parsed.resposta || inferirIntencaoFallback(messageText, userContext)
             break
 
           default:
-            resposta = MSG_AJUDA
+            resposta = inferirIntencaoFallback(messageText, userContext)
         }
       } catch (err) {
         console.error(`[WHATSAPP] Erro no handler ${parsed.tipo}:`, err.message)
