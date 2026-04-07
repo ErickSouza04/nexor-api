@@ -293,6 +293,8 @@ async function handleConsultaLucro(userId) {
 // WEBHOOK PRINCIPAL
 // ─────────────────────────────────────────────────────────
 const handleWebhook = async (req, res) => {
+  console.log('[ENV] GROQ_API_KEY presente:', !!process.env.GROQ_API_KEY)
+  console.log('[ENV] GROQ_API_KEY prefixo:', process.env.GROQ_API_KEY?.slice(0, 8))
   try {
     const body = req.body || {}
 
