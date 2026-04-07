@@ -8,7 +8,8 @@
 //   · audioMessage.url    — faz download antes de transcrever
 // ─────────────────────────────────────────────────────────
 
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
+const axios    = require('axios')
+const FormData = require('form-data')
 
 const WHISPER_URL   = 'https://api.groq.com/openai/v1/audio/transcriptions'
 const WHISPER_MODEL = 'whisper-large-v3-turbo'
@@ -22,11 +23,13 @@ async function downloadAudio(url) {
     headers['apikey'] = process.env.EVOLUTION_API_KEY
   }
 
-  const res = await fetch(url, { headers, timeout: 15000 })
-  if (!res.ok) throw new Error(`Download do áudio falhou: ${res.status}`)
+  const res = await axios.get(url, {
+    headers,
+    responseType: 'arraybuffer',
+    timeout: 15000
+  })
 
-  const arrayBuf = await res.arrayBuffer()
-  return Buffer.from(arrayBuf)
+  return Buffer.from(res.data)
 }
 
 // ── TRANSCREVER ÁUDIO ─────────────────────────────────────
@@ -58,39 +61,29 @@ async function transcribeAudio(audioData, mimeType = 'audio/ogg') {
       throw new Error('Buffer de áudio vazio')
     }
 
-    // 2. Montar multipart/form-data com FormData + Blob (Node 18+ globals)
+    // 2. Montar multipart/form-data com o pacote form-data
     // MIME sem parâmetros extras (ex: 'audio/ogg; codecs=opus' → 'audio/ogg')
     const cleanMime = mimeType.split(';')[0].trim() || 'audio/ogg'
-    const blob = new Blob([audioBuffer], { type: cleanMime })
 
-    const formData = new FormData()
-    formData.append('file',            blob, 'audio.ogg')
-    formData.append('model',           WHISPER_MODEL)
-    formData.append('language',        'pt')
-    formData.append('response_format', 'text')
+    const form = new FormData()
+    form.append('file', audioBuffer, {
+      filename:    'audio.ogg',
+      contentType: cleanMime
+    })
+    form.append('model',           WHISPER_MODEL)
+    form.append('language',        'pt')
+    form.append('response_format', 'text')
 
-    // 3. Chamar Groq Whisper com timeout
-    const controller = new AbortController()
-    const timeout    = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    // 3. Chamar Groq Whisper — form.getHeaders() garante o boundary correto
+    const response = await axios.post(WHISPER_URL, form, {
+      headers: {
+        ...form.getHeaders(),
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      timeout: TIMEOUT_MS
+    })
 
-    let texto
-    try {
-      const response = await fetch(WHISPER_URL, {
-        method:  'POST',
-        signal:  controller.signal,
-        headers: { 'Authorization': 'Bearer ' + process.env.GROQ_API_KEY },
-        body:    formData,
-      })
-
-      if (!response.ok) {
-        const errText = await response.text()
-        throw new Error(`Whisper API ${response.status}: ${errText}`)
-      }
-
-      texto = (await response.text()).trim()
-    } finally {
-      clearTimeout(timeout)
-    }
+    const texto = (typeof response.data === 'string' ? response.data : JSON.stringify(response.data)).trim()
 
     if (!texto) throw new Error('Whisper retornou transcrição vazia')
 
@@ -99,10 +92,11 @@ async function transcribeAudio(audioData, mimeType = 'audio/ogg') {
 
   } catch (err) {
     // Erro não quebra o fluxo — caller decide o fallback
-    if (err.name === 'AbortError') {
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
       console.error('[WHISPER] Timeout na transcrição')
     } else {
-      console.error('[WHISPER] Erro na transcrição:', err.message)
+      const detail = err.response?.data ?? err.message
+      console.error('[WHISPER] Erro na transcrição:', detail)
     }
     return null
   }
