@@ -346,15 +346,42 @@ const handleWebhook = async (req, res) => {
       return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
     }
 
+    // ── Gera variantes com/sem o 9º dígito do celular BR ────
+    // Exemplo: 556184890294 (12d) ↔ 5561984890294 (13d)
+    const phoneBRVariants = (phone) => {
+      const d = String(phone).replace(/\D/g, '')
+      const variants = new Set([d])
+      if (d.startsWith('55')) {
+        const local = d.slice(2) // remove código do país
+        // 10 dígitos locais = DDD(2) + número(8) → adiciona 9º dígito
+        if (local.length === 10) {
+          variants.add(`55${local.slice(0, 2)}9${local.slice(2)}`)
+        }
+        // 11 dígitos locais = DDD(2) + 9 + número(8) → remove 9º dígito
+        if (local.length === 11 && local[2] === '9') {
+          variants.add(`55${local.slice(0, 2)}${local.slice(3)}`)
+        }
+      }
+      return Array.from(variants)
+    }
+
     const phoneNorm = normalizePhone(phone)
     console.log('[WHATSAPP] phone normalizado:', phoneNorm)
 
     // ── Busca userId pelo número cadastrado ─────────────────
+    const phoneVariants = phoneBRVariants(phoneNorm)
     console.log('[WHATSAPP] buscando vínculo para:', phoneNorm)
+    console.log('[WHATSAPP] variantes pesquisadas:', phoneVariants)
+    console.log('[WHATSAPP] SQL: SELECT user_id, phone FROM user_phones WHERE phone = ANY($1) LIMIT 1')
+    console.log('[WHATSAPP] SQL params:', JSON.stringify(phoneVariants))
+
+    // Debug: mostra todos os vínculos cadastrados
+    const allPhones = await query('SELECT user_id, phone FROM user_phones ORDER BY created_at DESC')
+    console.log('[WHATSAPP] todos os vínculos na tabela user_phones:', allPhones.rows)
 
     const phoneResult = await query(
-      'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
-      [phoneNorm]
+      'SELECT user_id, phone FROM user_phones WHERE phone = ANY($1) LIMIT 1',
+      [phoneVariants]
     )
 
     console.log('[WHATSAPP] vínculo encontrado:', phoneResult.rows)
