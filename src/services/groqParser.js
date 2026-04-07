@@ -98,6 +98,61 @@ function fmtBR(valor) {
   return 'R$ ' + parseFloat(valor || 0).toFixed(2).replace('.', ',')
 }
 
+// ── Constrói exemplos few-shot dinâmicos com dados reais ─
+function buildFewShotExamples(userContext) {
+  const nome           = userContext?.nome         || 'você'
+  const lucro          = userContext?.lucro        ?? 0
+  const lucroProjetado = userContext?.lucroProjetado ?? 0
+  const metaValor      = userContext?.metaValor
+  const margem         = userContext?.margem       ?? '0.0'
+  const diaAtual       = userContext?.diaAtual     ?? 0
+  const weakDayInsight = userContext?.weakDayInsight
+
+  const lucroStr    = fmtBR(lucro)
+  const projecaoStr = fmtBR(lucroProjetado)
+  const margemStr   = margem + '%'
+
+  // Exemplo 1: pergunta vaga sobre desempenho
+  let ex1 = `Sim, ${nome}! 🔥 Você está com ${lucroStr} de lucro`
+  if (diaAtual > 0) ex1 += ` em ${diaAtual} dias`
+  ex1 += `, sua projeção é ${projecaoStr} esse mês`
+  if (metaValor && lucroProjetado >= metaValor) {
+    ex1 += ` — já passou da sua meta de ${fmtBR(metaValor)}! Continue assim 💪`
+  } else if (metaValor) {
+    ex1 += ` — sua meta é ${fmtBR(metaValor)}, continue assim 💪`
+  } else {
+    ex1 += `! Continue assim 💪`
+  }
+
+  // Exemplo 2: pedido de melhoria / análise crítica
+  let ex2
+  if (weakDayInsight) {
+    ex2 = `Entendi, ${nome}! Sua margem está em ${margemStr}, o que é ótimo. O ponto de atenção é o padrão de queda detectado nas suas vendas. Que tal uma promoção no dia mais fraco? 🎯`
+  } else {
+    ex2 = `Entendi, ${nome}! Sua margem está em ${margemStr}, o que é ótimo. Me conta: quer focar em aumentar vendas, reduzir despesas ou melhorar o estoque? 🎯`
+  }
+
+  return `
+---
+
+📚 Exemplos de respostas ideais (tom e formato de referência):
+
+Usuário: "tô indo bem?"
+Agente: "${ex1}"
+
+Usuário: "preciso melhorar"
+Agente: "${ex2}"
+
+Usuário: "gastei 200 reais com embalagem"
+Agente: "Anotado! 📝 Despesa de R$ 200,00 em embalagem registrada. Seu lucro do mês agora é ${lucroStr}."
+
+Usuário: "vendi 5 produtos por 150 cada"
+Agente: "Show! 💰 Venda de R$ 750,00 registrada. Seu total esse mês já é ${lucroStr}."
+
+---
+`
+}
+
 // ── Constrói system prompt personalizado com contexto do usuário ──
 function buildSystemPrompt(userContext) {
   if (!userContext) return PARSER_SYSTEM_DEFAULT
@@ -158,7 +213,9 @@ A transcrição pode conter erros, palavras incompletas ou frases informais.
 
 Sua função é interpretar corretamente a intenção do usuário.`
 
-  return intro + '\n\n' + perfil + '\n' + financeiro + '\n' + PARSER_COMMANDS
+  const fewShot = buildFewShotExamples(userContext)
+
+  return intro + '\n\n' + perfil + '\n' + financeiro + '\n' + fewShot + PARSER_COMMANDS
 }
 
 // ── Extrai o primeiro JSON válido de uma string ──────────
