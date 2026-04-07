@@ -352,6 +352,10 @@ const handleWebhook = async (req, res) => {
     // ── Busca userId pelo número cadastrado ─────────────────
     console.log('[WHATSAPP] buscando vínculo para:', phoneNorm)
 
+    // [DEBUG TEMPORÁRIO] dump de todos os registros em user_phones
+    const todos = await query('SELECT * FROM user_phones LIMIT 10')
+    console.log('[DEBUG] todos os vínculos:', JSON.stringify(todos.rows))
+
     const phoneResult = await query(
       'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
       [phoneNorm]
