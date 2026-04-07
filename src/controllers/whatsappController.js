@@ -339,25 +339,33 @@ const handleWebhook = async (req, res) => {
       return
     }
 
-    // ── Normaliza phone para formato brasileiro 55XXXXXXXXXX ─
-    const normalizePhone = (value = '') => {
-      const cleaned = String(value).replace(/\D/g, '')
-      if (!cleaned) return ''
-      return cleaned.startsWith('55') ? cleaned : `55${cleaned}`
+    // ── Gera as duas variantes do número brasileiro (com/sem nono dígito) ─
+    const phoneBRVariants = (raw) => {
+      const digits = String(raw).replace(/\D/g, '')
+      const sem55 = digits.startsWith('55') ? digits.slice(2) : digits
+      if (sem55.length === 11) {
+        // tem o 9: gera sem o 9
+        const sem9 = sem55.slice(0, 2) + sem55.slice(3)
+        return ['55' + sem55, '55' + sem9]
+      } else if (sem55.length === 10) {
+        // sem o 9: gera com o 9
+        const com9 = sem55.slice(0, 2) + '9' + sem55.slice(2)
+        return ['55' + sem55, '55' + com9]
+      }
+      return [digits]
     }
 
-    const phoneNorm = normalizePhone(phone)
-    console.log('[WHATSAPP] phone normalizado:', phoneNorm)
-
     // ── Busca userId pelo número cadastrado ─────────────────
-    console.log('[WHATSAPP] buscando vínculo para:', phoneNorm)
+    const variants = phoneBRVariants(phone)
+    const phoneNorm = variants[0]   // forma canônica para envio de respostas
+    console.log('[WHATSAPP] variantes buscadas:', variants)
 
     const phoneResult = await query(
-      'SELECT user_id, phone FROM user_phones WHERE phone = $1 LIMIT 1',
-      [phoneNorm]
+      'SELECT user_id, phone FROM user_phones WHERE phone = ANY($1) LIMIT 1',
+      [variants]
     )
 
-    console.log('[WHATSAPP] vínculo encontrado:', phoneResult.rows)
+    console.log('[WHATSAPP] resultado query:', phoneResult.rows)
 
     if (!phoneResult.rows.length) {
       await sendMessage(phoneNorm, MSG_CADASTRO, messageId)
