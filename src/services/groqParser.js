@@ -100,6 +100,8 @@ function extrairJSON(raw) {
 
 // ── Wrapper com timeout ──────────────────────────────────
 async function groqRequest(messages) {
+  console.log('[DEBUG groqParser] GROQ_API_KEY presente:', !!process.env.GROQ_API_KEY)
+  console.log('[DEBUG groqParser] GROQ_API_KEY valor:', process.env.GROQ_API_KEY?.slice(0, 10) + '...')
   const controller = new AbortController()
   const timeout    = setTimeout(() => controller.abort(), TIMEOUT_MS)
 

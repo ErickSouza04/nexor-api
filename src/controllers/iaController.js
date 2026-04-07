@@ -44,6 +44,8 @@ function extrairJSON(raw) {
 
 // ── Wrapper com timeout para o Groq ───────────────────────
 async function groqRequest(messages, maxTokens) {
+  console.log('[DEBUG iaController] GROQ_API_KEY presente:', !!process.env.GROQ_API_KEY)
+  console.log('[DEBUG iaController] GROQ_API_KEY valor:', process.env.GROQ_API_KEY?.slice(0, 10) + '...')
   const controller = new AbortController()
   const timeout    = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS)
 
