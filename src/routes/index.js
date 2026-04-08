@@ -71,6 +71,7 @@ router.delete('/produtos/:id',      ...privado, validarUUID,    metasCtrl.deleta
 
 // Perfil
 router.put('/usuarios/perfil', autenticar, validarPerfil, authCtrl.atualizarPerfil)
+router.get('/usuarios/perfil', autenticar, authCtrl.getPerfil)
 
 // Usuário logado
 router.get('/users/me', autenticar, authCtrl.me)
