@@ -711,7 +711,14 @@ const handleWebhook = async (req, res) => {
   try {
     const body = req.body || {}
 
-    // ── Ignora callbacks de status (entregue, lido, falhou, etc.) ──
+    // Validação do token Z-API
+    const zapiToken = req.headers['z-api-token']
+    const expectedToken = process.env.ZAPI_CLIENT_TOKEN
+    if (expectedToken && zapiToken !== expectedToken) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // ── Ignora callbacks de status ──
     if (body.type === 'MessageStatusCallback') return res.sendStatus(200)
 
     res.sendStatus(200)
