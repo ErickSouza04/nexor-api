@@ -141,7 +141,7 @@ const handleWebhook = async (req, res) => {
           console.warn('[STRIPE] checkout.session.completed sem userId no metadata')
           break
         }
-        await atualizarPlan(userId, plano, subId)
+        await atualizarPlan(userId, plano, subId, 'ativo')
         console.log(`[STRIPE] ✅ Plano ativado: user ${userId} → ${plano}`)
         break
       }
@@ -160,10 +160,10 @@ const handleWebhook = async (req, res) => {
         const plano   = planoDoPrice(priceId)
 
         if (sub.status === 'active') {
-          await atualizarPlan(userId, plano, sub.id)
+          await atualizarPlan(userId, plano, sub.id, 'ativo')
           console.log(`[STRIPE] 🔄 Assinatura atualizada: user ${userId} → ${plano}`)
         } else if (['past_due', 'unpaid', 'canceled'].includes(sub.status)) {
-          await atualizarPlan(userId, 'base', null)
+          await atualizarPlan(userId, 'base', null, 'cancelado')
           console.log(`[STRIPE] ⚠️ Acesso rebaixado (${sub.status}): user ${userId} → base`)
         }
         break
@@ -178,7 +178,7 @@ const handleWebhook = async (req, res) => {
           console.warn('[STRIPE] customer.subscription.deleted sem userId no metadata')
           break
         }
-        await atualizarPlan(userId, 'base', null)
+        await atualizarPlan(userId, 'base', null, 'cancelado')
         console.log(`[STRIPE] ❌ Assinatura cancelada: user ${userId} → base`)
         break
       }
@@ -196,15 +196,16 @@ const handleWebhook = async (req, res) => {
 }
 
 // ── Helper: atualiza plan + stripe_subscription_id ───────
-async function atualizarPlan(userId, plano, subscriptionId) {
+async function atualizarPlan(userId, plano, subscriptionId, statusPlano) {
   const resultado = await query(
     `UPDATE usuarios
      SET plan                   = $2,
+         plano                  = $4,
          stripe_subscription_id = COALESCE($3, stripe_subscription_id),
          atualizado_em          = NOW()
      WHERE id = $1
      RETURNING id`,
-    [userId, plano, subscriptionId || null]
+    [userId, plano, subscriptionId || null, statusPlano]
   )
   if (!resultado.rows.length) {
     console.warn(`[STRIPE] Usuário não encontrado pelo ID: ${userId}`)
