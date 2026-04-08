@@ -243,20 +243,96 @@ async function handleDespesa(userId, parsed, userContext) {
 }
 
 async function handleVenda(userId, parsed, userContext) {
+  const nomeProduto = parsed.produto
+  const quantidade  = parsed.quantidade || 1
+  const data        = resolverData(parsed.data)
+
+  // Se o parser informou um produto, tenta buscar no catálogo de estoque
+  if (nomeProduto) {
+    const prodResult = await queryWithUser(userId,
+      `SELECT id, sale_price, cost_price, current_stock, name
+       FROM products
+       WHERE user_id = $1 AND LOWER(name) ILIKE LOWER($2)
+       LIMIT 1`,
+      [userId, `%${nomeProduto}%`]
+    )
+
+    if (!prodResult.rows.length) {
+      return `❌ Não encontrei o produto *${nomeProduto}* no seu estoque. Verifique o nome e tente novamente.`
+    }
+
+    const produto      = prodResult.rows[0]
+    const salePrice    = parseFloat(produto.sale_price  || 0)
+    const costPrice    = parseFloat(produto.cost_price  || 0)
+    const estoqueAtual = parseFloat(produto.current_stock || 0)
+    const valorTotal   = salePrice * quantidade
+    const custoTotal   = costPrice * quantidade
+    const lucroVenda   = valorTotal - custoTotal
+    const estoqueApos  = estoqueAtual - quantidade
+
+    // Registra venda + baixa de estoque em transação atômica
+    await transaction(userId, async (client) => {
+      // Insere venda com product_id, cost_price_snapshot e quantidade
+      await client.query(
+        `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data, product_id, cost_price_snapshot, quantidade)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          userId,
+          valorTotal,
+          parsed.categoria || 'Produto',
+          'Pix',
+          produto.name,
+          data,
+          produto.id,
+          costPrice,
+          quantidade,
+        ]
+      )
+
+      // Baixa no estoque (stock_movements + atualiza current_stock)
+      await client.query(
+        `INSERT INTO stock_movements (product_id, user_id, type, quantity, unit_price, source, raw_message)
+         VALUES ($1, $2, 'saida', $3, $4, 'whatsapp', $5)`,
+        [
+          produto.id,
+          userId,
+          quantidade,
+          salePrice,
+          `Venda via WhatsApp: ${produto.name} x${quantidade}`,
+        ]
+      )
+
+      await client.query(
+        `UPDATE products SET current_stock = current_stock - $1 WHERE id = $2`,
+        [quantidade, produto.id]
+      )
+    })
+
+    return [
+      '✅ Venda registrada!',
+      `Produto: ${produto.name}`,
+      `Qtd: ${quantidade} × ${fmt(salePrice)} = ${fmt(valorTotal)}`,
+      `Lucro desta venda: ${fmt(lucroVenda)}`,
+      `Estoque restante: ${estoqueApos}`,
+    ].join('\n')
+  }
+
+  // Sem produto identificado — fluxo original (venda por valor avulso)
   if (!parsed.valor) {
     return '❓ Qual foi o valor da venda? Tente: *Vendi 3 bolos por R$ 30*'
   }
-  const data = resolverData(parsed.data)
+
   await queryWithUser(userId,
-    `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data, quantidade)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       userId,
       parsed.valor,
       parsed.categoria || 'Produto',
       'Pix',
-      parsed.produto || null,
+      null,
       data,
+      quantidade,
     ]
   )
 
@@ -272,11 +348,9 @@ async function handleVenda(userId, parsed, userContext) {
     lucroCrescendo: dia.lucro > lucroOntem,
   })
 
-  const desc = parsed.produto || parsed.descricao || 'Venda'
-
   return [
     '✅ Venda registrada!',
-    `💰 ${desc}: ${fmt(parsed.valor)}`,
+    `💰 ${fmt(parsed.valor)}`,
     '',
     '📊 Lucro do dia:',
     `Receita: ${fmt(dia.receita)}`,
