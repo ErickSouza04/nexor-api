@@ -2,7 +2,7 @@
 const bcrypt = require('bcrypt')
 const jwt    = require('jsonwebtoken')
 const { v4: uuidv4 } = require('uuid')
-const { query, pool } = require('../config/database')
+const { query, pool, queryWithUser } = require('../config/database')
 const { calcularStatusPlano } = require('../middleware/auth')
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS) || 12
@@ -338,4 +338,30 @@ const statusPlano = async (req, res) => {
   }
 }
 
-module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me }
+// ── PERFIL COMPLETO (com metas) ──────────────────────────
+const getPerfil = async (req, res) => {
+  try {
+    const userId = req.userId
+    const result = await queryWithUser(
+      userId,
+      `SELECT u.id, u.nome, u.email, u.plan, u.plano,
+              u.pro_labore, u.meta_lucro,
+              m.valor_meta, m.pro_labore AS meta_pro_labore
+       FROM usuarios u
+       LEFT JOIN metas m ON m.user_id = u.id
+       WHERE u.id = $1
+       ORDER BY m.ano DESC, m.mes DESC
+       LIMIT 1`,
+      [userId]
+    )
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Não encontrado' })
+    }
+    res.json(result.rows[0])
+  } catch (e) {
+    console.error('getPerfil error:', e)
+    res.status(500).json({ error: 'Erro ao buscar perfil' })
+  }
+}
+
+module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me, getPerfil }
