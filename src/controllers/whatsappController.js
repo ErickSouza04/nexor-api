@@ -711,6 +711,14 @@ const handleWebhook = async (req, res) => {
   try {
     const body = req.body || {}
 
+    // [DEBUG TEMPORÁRIO] — remover após confirmar header correto
+    console.log('[DEBUG-HEADERS]', JSON.stringify({
+      'z-api-token': req.headers['z-api-token'],
+      'x-zapi-token': req.headers['x-zapi-token'],
+      'authorization': req.headers['authorization'],
+      'all-keys': Object.keys(req.headers)
+    }))
+
     // Validação do token Z-API
     const zapiToken = req.headers['z-api-token']
     const expectedToken = process.env.ZAPI_CLIENT_TOKEN
