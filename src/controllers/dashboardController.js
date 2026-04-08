@@ -33,6 +33,17 @@ const resumoCompleto = async (req, res) => {
       [userId, mes, ano]
     )
 
+    // COGS: custo das mercadorias vendidas (somente vendas com cost_price_snapshot)
+    const cogsRes = await queryWithUser(userId,
+      `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS total_cogs
+       FROM vendas
+       WHERE user_id = $1
+         AND cost_price_snapshot IS NOT NULL
+         AND EXTRACT(MONTH FROM data) = $2
+         AND EXTRACT(YEAR FROM data) = $3`,
+      [userId, mes, ano]
+    )
+
     // Dados do mês anterior (para comparação)
     const mesAnterior = mes === 1 ? 12 : mes - 1
     const anoAnterior = mes === 1 ? ano - 1 : ano
@@ -46,16 +57,27 @@ const resumoCompleto = async (req, res) => {
        WHERE user_id = $1 AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`,
       [userId, mesAnterior, anoAnterior]
     )
+    const cogsAntRes = await queryWithUser(userId,
+      `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS total_cogs
+       FROM vendas
+       WHERE user_id = $1
+         AND cost_price_snapshot IS NOT NULL
+         AND EXTRACT(MONTH FROM data) = $2
+         AND EXTRACT(YEAR FROM data) = $3`,
+      [userId, mesAnterior, anoAnterior]
+    )
 
-    // Calcular lucro
+    // Calcular lucro real (faturamento - despesas operacionais - COGS)
     const faturamento    = parseFloat(vendas.rows[0].faturamento)
     const totalDespesas  = parseFloat(despesas.rows[0].total_despesas)
-    const lucro          = faturamento - totalDespesas
+    const totalCogs      = parseFloat(cogsRes.rows[0].total_cogs)
+    const lucro          = faturamento - totalDespesas - totalCogs
     const margem         = faturamento > 0 ? (lucro / faturamento) * 100 : 0
 
     const fatAnt         = parseFloat(vendasAnt.rows[0].faturamento)
     const despAnt        = parseFloat(despesasAnt.rows[0].total)
-    const lucroAnt       = fatAnt - despAnt
+    const cogsAnt        = parseFloat(cogsAntRes.rows[0].total_cogs)
+    const lucroAnt       = fatAnt - despAnt - cogsAnt
 
     // Variação percentual
     const varFat   = fatAnt > 0 ? ((faturamento - fatAnt) / fatAnt) * 100 : 0
