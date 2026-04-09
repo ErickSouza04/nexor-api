@@ -11,18 +11,6 @@ const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN
 const ZAPI_URL = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`
 
 async function sendMessage(phone, message, replyMessageId = null) {
-  console.log('[DEBUG-SENDER]', {
-    clientToken: process.env.ZAPI_CLIENT_TOKEN
-      ? process.env.ZAPI_CLIENT_TOKEN.slice(0,6) + '...' + process.env.ZAPI_CLIENT_TOKEN.slice(-4)
-      : 'UNDEFINED',
-    instanceId: process.env.ZAPI_INSTANCE_ID
-      ? process.env.ZAPI_INSTANCE_ID.slice(0,6) + '...'
-      : 'UNDEFINED',
-    zapiToken: process.env.ZAPI_TOKEN
-      ? process.env.ZAPI_TOKEN.slice(0,6) + '...' + process.env.ZAPI_TOKEN.slice(-4)
-      : 'UNDEFINED'
-  })
-
   const normalizedPhone = String(phone).startsWith('55') ? String(phone) : `55${phone}`
 
   console.log('[sendMessage] Enviando para:', normalizedPhone)

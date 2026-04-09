@@ -82,6 +82,7 @@ Regras:
 - Se não for comando, responder normalmente em português brasileiro
 - Sempre use o nome da pessoa nas respostas conversacionais
 - Seja amigável, motivador e personalizado
+- Todos os valores monetários são em Reais (BRL, R$). Se o usuário informar valor com $ ou USD, interprete como R$ diretamente, sem conversão cambial. Nunca faça conversão de moeda. Use sempre R$.
 `
 
 // ── Fallback sem contexto de usuário ────────────────────
