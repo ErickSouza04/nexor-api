@@ -721,7 +721,7 @@ const handleWebhook = async (req, res) => {
 
     // Validação do token Z-API
     const zapiToken = req.headers['z-api-token']
-    const expectedToken = process.env.ZAPI_CLIENT_TOKEN
+    const expectedToken = process.env.ZAPI_TOKEN
     if (expectedToken && zapiToken !== expectedToken) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
