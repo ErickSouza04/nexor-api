@@ -128,20 +128,21 @@ function fmt(valor) {
 
 // ── Busca receita/despesas/lucro do dia para o usuário ──
 async function buscarLucroDia(userId) {
-  const hoje   = new Date()
-  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0)
-  const fim    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59)
+  // Usa a mesma lógica de data que resolverData() — string UTC 'YYYY-MM-DD'
+  // Isso garante consistência com como os registros são salvos e evita
+  // problemas de conversão de fuso horário ao comparar DATE com TIMESTAMP.
+  const dataHoje = new Date().toISOString().split('T')[0]
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,
       `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
-       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
-      [userId, inicio, fim]
+       WHERE user_id = $1 AND data = $2`,
+      [userId, dataHoje]
     ),
     queryWithUser(userId,
       `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
-       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
-      [userId, inicio, fim]
+       WHERE user_id = $1 AND data = $2`,
+      [userId, dataHoje]
     ),
   ])
 
@@ -155,20 +156,18 @@ async function buscarLucroDia(userId) {
 
 // ── Busca lucro de ontem (para comparação de crescimento) ─
 async function buscarLucroOntem(userId) {
-  const hoje   = new Date()
-  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1, 0, 0, 0)
-  const fim    = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1, 23, 59, 59)
+  const dataOntem = new Date(Date.now() - 86400000).toISOString().split('T')[0]
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,
       `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
-       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
-      [userId, inicio, fim]
+       WHERE user_id = $1 AND data = $2`,
+      [userId, dataOntem]
     ),
     queryWithUser(userId,
       `SELECT COALESCE(SUM(valor), 0) AS total FROM despesas
-       WHERE user_id = $1 AND data >= $2 AND data <= $3`,
-      [userId, inicio, fim]
+       WHERE user_id = $1 AND data = $2`,
+      [userId, dataOntem]
     ),
   ])
 
@@ -308,12 +307,30 @@ async function handleVenda(userId, parsed, userContext) {
       )
     })
 
+    const dia        = await buscarLucroDia(userId)
+    const lucroOntem = await buscarLucroOntem(userId)
+    const percentualMeta = userContext?.metaValor
+      ? (userContext.lucro / userContext.metaValor) * 100
+      : null
+    const frase = gerarFraseMotivacional({
+      margem: dia.margem,
+      percentualMeta,
+      lucroCrescendo: dia.lucro > lucroOntem,
+    })
+
     return [
       '✅ Venda registrada!',
       `Produto: ${produto.name}`,
       `Qtd: ${quantidade} × ${fmt(salePrice)} = ${fmt(valorTotal)}`,
       `Lucro desta venda: ${fmt(lucroVenda)}`,
       `Estoque restante: ${estoqueApos}`,
+      '',
+      '📊 Lucro do dia:',
+      `Receita: ${fmt(dia.receita)}`,
+      `Despesas: ${fmt(dia.despesas)}`,
+      `Lucro: ${fmt(dia.lucro)} (margem ${dia.margem}%)`,
+      '',
+      frase,
     ].join('\n')
   }
 
