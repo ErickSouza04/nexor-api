@@ -998,6 +998,10 @@ const handleWebhook = async (req, res) => {
       }
     }
 
+    console.log('[DEBUG-FLOW] chegou após handler, resposta:', resposta?.slice(0,50))
+    console.log('[DEBUG-FLOW] phoneNorm:', phoneNorm)
+    console.log('[DEBUG-FLOW] messageId:', messageId)
+
     // ── Salva mensagem do usuário + resposta no histórico ───
     try {
       await saveHistory(userId, phoneNorm, 'user', messageText)
