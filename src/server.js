@@ -190,6 +190,28 @@ const server = app.listen(PORT, async () => {
   `)
   await runMigrations()
   initCronJobs()
+
+  // ── KEEP-ALIVE: evita cold start no Railway ──────────────
+  const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : `http://localhost:${PORT}`
+
+  const pingTargets = [`${baseUrl}/health`]
+
+  if (process.env.NEXOR_BACKEND_URL) {
+    pingTargets.push(`${process.env.NEXOR_BACKEND_URL}/health`)
+  }
+
+  setInterval(async () => {
+    for (const url of pingTargets) {
+      try {
+        await fetch(url)
+        console.log('[keep-alive] ping ok:', url)
+      } catch (err) {
+        console.error(`[keep-alive] ping falhou: ${err.message}`)
+      }
+    }
+  }, 9 * 60 * 1000)
 })
 
 // ── GRACEFUL SHUTDOWN ─────────────────────────────────────
