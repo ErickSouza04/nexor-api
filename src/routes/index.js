@@ -24,6 +24,7 @@ const webhookCtrl = require('../controllers/webhookController')
 
 // ── AUTH (públicas) ──────────────────────────────────────
 router.post('/auth/cadastro',        validarCadastro, authCtrl.cadastrar)
+router.post('/auth/cadastrar',                        authCtrl.cadastrar)
 router.post('/auth/login',           validarLogin,    authCtrl.login)
 router.post('/auth/refresh',                          authCtrl.refreshToken)
 router.post('/auth/logout',          autenticar,      authCtrl.logout)
