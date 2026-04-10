@@ -70,7 +70,8 @@ router.post('/produtos',            ...privado, validarProduto,  metasCtrl.criar
 router.delete('/produtos/:id',      ...privado, validarUUID,    metasCtrl.deletarProduto)
 
 // Perfil
-router.put('/usuarios/perfil', autenticar, validarPerfil, authCtrl.atualizarPerfil)
+router.put('/usuarios/perfil',       autenticar, validarPerfil, authCtrl.atualizarPerfil)
+router.patch('/usuarios/onboarding', autenticar, authCtrl.salvarOnboarding)
 
 // Usuário logado
 router.get('/users/me', autenticar, authCtrl.me)
