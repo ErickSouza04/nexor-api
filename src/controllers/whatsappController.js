@@ -20,6 +20,7 @@ const { sendMessage }         = require('../services/whatsappSender')
 const { transcribeAudio }     = require('../services/whisperTranscriber')
 const { getHistory, saveMessage: saveHistory } = require('../services/conversationHistory')
 const { detectWeakDayPattern } = require('../services/patternDetection')
+const { getDataBrasil, getDataOntemBrasil } = require('../utils/dateUtils')
 
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
@@ -66,13 +67,11 @@ function inferirIntencaoFallback(messageText, userContext) {
 }
 
 // ── Converte 'hoje'/'ontem' para ISO date string ─────────
+// Usa fuso de Brasília para que '22h no Brasil' seja registrado
+// como o dia correto do usuário — não o dia UTC do servidor.
 function resolverData(data) {
-  if (!data || data === 'hoje') return new Date().toISOString().split('T')[0]
-  if (data === 'ontem') {
-    const d = new Date()
-    d.setDate(d.getDate() - 1)
-    return d.toISOString().split('T')[0]
-  }
+  if (!data || data === 'hoje') return getDataBrasil()
+  if (data === 'ontem') return getDataOntemBrasil()
   return data  // assume ISO YYYY-MM-DD
 }
 
@@ -128,10 +127,9 @@ function fmt(valor) {
 
 // ── Busca receita/despesas/lucro do dia para o usuário ──
 async function buscarLucroDia(userId) {
-  // Usa a mesma lógica de data que resolverData() — string UTC 'YYYY-MM-DD'
-  // Isso garante consistência com como os registros são salvos e evita
-  // problemas de conversão de fuso horário ao comparar DATE com TIMESTAMP.
-  const dataHoje = new Date().toISOString().split('T')[0]
+  // Usa fuso de Brasília — mesmo critério de resolverData() —
+  // para que a consulta bata com o dia em que a venda foi registrada.
+  const dataHoje = getDataBrasil()
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,
@@ -156,7 +154,7 @@ async function buscarLucroDia(userId) {
 
 // ── Busca lucro de ontem (para comparação de crescimento) ─
 async function buscarLucroOntem(userId) {
-  const dataOntem = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+  const dataOntem = getDataOntemBrasil()
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,

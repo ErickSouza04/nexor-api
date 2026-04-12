@@ -1,4 +1,5 @@
 // src/controllers/dashboardController.js
+const { getDataBrasil } = require('../utils/dateUtils')
 // ─────────────────────────────────────────────────────────
 // Controller do Dashboard
 // Calcula Índice Nexor, resumo completo do mês,
@@ -277,13 +278,15 @@ const fluxoDiario = async (req, res) => {
       [userId]
     )
 
-    // Gera todos os dias do período
+    // Gera todos os dias do período usando fuso de Brasília,
+    // para que "hoje" no loop bata com o dia salvo pelo usuário.
     const dias = []
     for (let i = 13; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i)
-      const dataStr = d.toISOString().split('T')[0]
-      const venda = vendDiario.rows.find(r => r.data.toISOString().split('T')[0] === dataStr)
-      const desp  = despDiario.rows.find(r => r.data.toISOString().split('T')[0] === dataStr)
+      const dataStr = getDataBrasil(d)
+      // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente
+      const venda = vendDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
+      const desp  = despDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
       const fat   = venda ? parseFloat(venda.total) : 0
       const despTotal = desp ? parseFloat(desp.total) : 0
       dias.push({
