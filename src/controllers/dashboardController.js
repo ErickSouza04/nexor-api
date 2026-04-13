@@ -282,8 +282,9 @@ const fluxoDiario = async (req, res) => {
     // para que "hoje" no loop bata com o dia salvo pelo usuário.
     const dias = []
     for (let i = 13; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i)
-      const dataStr = getDataBrasil(d)
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dataStr = getDataBrasil(d)  // Brasil, não UTC
       // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente
       const venda = vendDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
       const desp  = despDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
