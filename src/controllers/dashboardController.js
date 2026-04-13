@@ -265,16 +265,26 @@ const fluxoDiario = async (req, res) => {
     const userId = req.userId
 
     const vendDiario = await queryWithUser(userId,
-      `SELECT data, SUM(valor) AS total
-       FROM vendas WHERE user_id = $1 AND data >= NOW() - INTERVAL '14 days'
-       GROUP BY data ORDER BY data`,
+      `SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') AS data,
+              SUM(valor) AS total
+       FROM vendas
+       WHERE user_id = $1
+         AND DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
+             >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '14 days'
+       GROUP BY DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
+       ORDER BY data`,
       [userId]
     )
 
     const despDiario = await queryWithUser(userId,
-      `SELECT data, SUM(valor) AS total
-       FROM despesas WHERE user_id = $1 AND data >= NOW() - INTERVAL '14 days'
-       GROUP BY data ORDER BY data`,
+      `SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') AS data,
+              SUM(valor) AS total
+       FROM despesas
+       WHERE user_id = $1
+         AND DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
+             >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '14 days'
+       GROUP BY DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
+       ORDER BY data`,
       [userId]
     )
 

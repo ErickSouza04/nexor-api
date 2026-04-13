@@ -5,6 +5,7 @@
 // NUNCA aceita user_id do body ou query params
 // ─────────────────────────────────────────────────────────
 const { queryWithUser, transaction } = require('../config/database')
+const { getDataBrasil } = require('../utils/dateUtils')
 
 // ── LISTAR vendas (com filtro de mês/ano) ───────────────
 const listar = async (req, res) => {
@@ -71,7 +72,7 @@ const criar = async (req, res) => {
       `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [userId, parseFloat(valor), categoria, pagamento, produto || descricao || null, data || new Date()]
+      [userId, parseFloat(valor), categoria, pagamento, produto || descricao || null, data || getDataBrasil()]
     )
 
     res.status(201).json({
