@@ -43,10 +43,12 @@ router.post('/admin/plano', webhookCtrl.ativarManual)
 const privado = [autenticar, exigirPlanoAtivo]
 
 // Dashboard
-router.get('/dashboard/resumo',     ...privado, dashCtrl.resumoCompleto)
-router.get('/dashboard/indice',     ...privado, dashCtrl.indiceNexor)
-router.get('/dashboard/comparacao', ...privado, dashCtrl.comparacaoMeses)
-router.get('/dashboard/diario',     ...privado, dashCtrl.fluxoDiario)
+router.get('/dashboard/resumo',            ...privado, dashCtrl.resumoCompleto)
+router.get('/dashboard/indice',            ...privado, dashCtrl.indiceNexor)
+router.get('/dashboard/comparacao',        ...privado, dashCtrl.comparacaoMeses)
+router.get('/dashboard/diario',            ...privado, dashCtrl.fluxoDiario)
+router.get('/dashboard/hoje',              ...privado, dashCtrl.resumoHoje)
+router.get('/dashboard/ultimos-registros', ...privado, dashCtrl.ultimosRegistros)
 
 // Vendas
 router.get ('/vendas',              ...privado,               vendasCtrl.listar)

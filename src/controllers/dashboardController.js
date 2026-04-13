@@ -259,6 +259,135 @@ const comparacaoMeses = async (req, res) => {
   }
 }
 
+// ── RESUMO DE HOJE (hero card — polling leve) ────────────
+// Retorna apenas os dados do dia atual para atualizar o hero card
+// sem precisar recarregar o dashboard inteiro.
+// Filtra pela coluna `data` (DATE em fuso Brasília) — mesmo critério
+// usado pelo agente WhatsApp em resolverData() — garantindo que
+// vendas registradas via WhatsApp apareçam aqui.
+const resumoHoje = async (req, res) => {
+  try {
+    const userId = req.userId
+    const dataHoje = getDataBrasil()
+
+    const [vendasRes, despesasRes, cogsRes, ontemVendasRes, ontemDespesasRes] = await Promise.all([
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS receita, COUNT(*) AS qtd_vendas
+         FROM vendas WHERE user_id = $1 AND data = $2`,
+        [userId, dataHoje]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS despesas
+         FROM despesas WHERE user_id = $1 AND data = $2`,
+        [userId, dataHoje]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS cogs
+         FROM vendas WHERE user_id = $1 AND data = $2 AND cost_price_snapshot IS NOT NULL`,
+        [userId, dataHoje]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS receita
+         FROM vendas WHERE user_id = $1 AND data = $2`,
+        [userId, (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS despesas
+         FROM despesas WHERE user_id = $1 AND data = $2`,
+        [userId, (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()]
+      ),
+    ])
+
+    const receita      = parseFloat(vendasRes.rows[0].receita)
+    const despesas     = parseFloat(despesasRes.rows[0].despesas)
+    const cogs         = parseFloat(cogsRes.rows[0].cogs)
+    const lucro        = receita - despesas - cogs
+    const margem       = receita > 0 ? (lucro / receita) * 100 : 0
+
+    const receitaOntem = parseFloat(ontemVendasRes.rows[0].receita)
+    const despOntem    = parseFloat(ontemDespesasRes.rows[0].despesas)
+    const lucroOntem   = receitaOntem - despOntem
+    const varLucro     = lucroOntem > 0 ? ((lucro - lucroOntem) / lucroOntem) * 100 : 0
+    const varReceita   = receitaOntem > 0 ? ((receita - receitaOntem) / receitaOntem) * 100 : 0
+
+    const agora = new Date()
+    const horaFormatada = agora.toLocaleTimeString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    res.json({
+      sucesso: true,
+      dados: {
+        data:           dataHoje,
+        receita,
+        total_despesas: despesas,
+        lucro,
+        margem:         parseFloat(margem.toFixed(2)),
+        qtd_vendas:     parseInt(vendasRes.rows[0].qtd_vendas),
+        variacao: {
+          receita: parseFloat(varReceita.toFixed(1)),
+          lucro:   parseFloat(varLucro.toFixed(1)),
+        },
+        atualizado_em: horaFormatada,
+      }
+    })
+
+  } catch (err) {
+    console.error('Erro no resumo de hoje:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao buscar dados de hoje' })
+  }
+}
+
+// ── ÚLTIMOS REGISTROS (vendas + despesas combinados) ────
+// UNION de vendas e despesas ordenado por criado_em DESC.
+// Vendas registradas pelo agente WhatsApp têm criado_em = NOW()
+// e aparecem automaticamente aqui assim que inseridas.
+const ultimosRegistros = async (req, res) => {
+  try {
+    const userId = req.userId
+    const limite = Math.min(parseInt(req.query.limite) || 5, 20)
+
+    const resultado = await queryWithUser(userId,
+      `SELECT tipo, valor, descricao, categoria, criado_em
+       FROM (
+         SELECT 'venda'   AS tipo,
+                valor,
+                COALESCE(produto, categoria, 'Venda') AS descricao,
+                categoria,
+                criado_em
+         FROM vendas WHERE user_id = $1
+         UNION ALL
+         SELECT 'despesa' AS tipo,
+                valor,
+                COALESCE(descricao, categoria, 'Despesa') AS descricao,
+                categoria,
+                criado_em
+         FROM despesas WHERE user_id = $1
+       ) registros
+       ORDER BY criado_em DESC
+       LIMIT $2`,
+      [userId, limite]
+    )
+
+    res.json({
+      sucesso: true,
+      dados: resultado.rows.map(r => ({
+        tipo:      r.tipo,
+        valor:     parseFloat(r.valor),
+        descricao: r.descricao,
+        categoria: r.categoria,
+        criado_em: r.criado_em,
+      }))
+    })
+
+  } catch (err) {
+    console.error('Erro nos últimos registros:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao buscar últimos registros' })
+  }
+}
+
 // ── FLUXO DIÁRIO (últimos 14 dias) ──────────────────────
 const fluxoDiario = async (req, res) => {
   try {
@@ -315,4 +444,4 @@ const fluxoDiario = async (req, res) => {
   }
 }
 
-module.exports = { resumoCompleto, indiceNexor, comparacaoMeses, fluxoDiario }
+module.exports = { resumoCompleto, indiceNexor, comparacaoMeses, fluxoDiario, resumoHoje, ultimosRegistros }
