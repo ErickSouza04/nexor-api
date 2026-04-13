@@ -337,6 +337,8 @@ async function handleVenda(userId, parsed, userContext) {
     return '❓ Qual foi o valor da venda? Tente: *Vendi 3 bolos por R$ 30*'
   }
 
+  const descricaoVenda = parsed.descricao || parsed.produto || null
+
   await queryWithUser(userId,
     `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data, quantidade)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -345,7 +347,7 @@ async function handleVenda(userId, parsed, userContext) {
       parsed.valor,
       parsed.categoria || 'Produto',
       'Pix',
-      null,
+      descricaoVenda,
       data,
       quantidade,
     ]
@@ -363,9 +365,13 @@ async function handleVenda(userId, parsed, userContext) {
     lucroCrescendo: dia.lucro > lucroOntem,
   })
 
+  const linhaDescricao = descricaoVenda
+    ? `💰 ${descricaoVenda}: ${fmt(parsed.valor)}`
+    : `💰 ${fmt(parsed.valor)}`
+
   return [
     '✅ Venda registrada!',
-    `💰 ${fmt(parsed.valor)}`,
+    linhaDescricao,
     '',
     '📊 Lucro do dia:',
     `Receita: ${fmt(dia.receita)}`,

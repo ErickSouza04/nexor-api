@@ -16,7 +16,7 @@ const listar = async (req, res) => {
     const offset = (pagina - 1) * limite
 
     let sql = `
-      SELECT id, valor, categoria, pagamento, produto, data, criado_em
+      SELECT id, valor, categoria, pagamento, produto, produto AS descricao, data, criado_em
       FROM vendas
       WHERE user_id = $1
     `
@@ -65,13 +65,13 @@ const listar = async (req, res) => {
 const criar = async (req, res) => {
   try {
     const userId = req.userId
-    const { valor, categoria, pagamento, produto, data } = req.body
+    const { valor, categoria, pagamento, produto, descricao, data } = req.body
 
     const resultado = await queryWithUser(userId,
       `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [userId, parseFloat(valor), categoria, pagamento, produto || null, data || new Date()]
+      [userId, parseFloat(valor), categoria, pagamento, produto || descricao || null, data || new Date()]
     )
 
     res.status(201).json({
