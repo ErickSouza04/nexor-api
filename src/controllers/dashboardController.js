@@ -11,8 +11,10 @@ const { queryWithUser } = require('../config/database')
 const resumoCompleto = async (req, res) => {
   try {
     const userId = req.userId
-    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
-    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    // Fallback usa fuso de Brasília para não retornar mês errado em servidores UTC
+    const _hoje = getDataBrasil()
+    const mes = parseInt(req.query.mes) || parseInt(_hoje.slice(5, 7))
+    const ano = parseInt(req.query.ano) || parseInt(_hoje.slice(0, 4))
 
     // Faturamento do mês
     const vendas = await queryWithUser(userId,
@@ -122,8 +124,9 @@ const resumoCompleto = async (req, res) => {
 const indiceNexor = async (req, res) => {
   try {
     const userId = req.userId
-    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
-    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    const _hojei = getDataBrasil()
+    const mes = parseInt(req.query.mes) || parseInt(_hojei.slice(5, 7))
+    const ano = parseInt(req.query.ano) || parseInt(_hojei.slice(0, 4))
 
     // 1. Margem atual (peso: 35 pts)
     const vendas   = await queryWithUser(userId,
@@ -388,46 +391,45 @@ const ultimosRegistros = async (req, res) => {
   }
 }
 
-// ── FLUXO DIÁRIO (últimos 14 dias) ──────────────────────
+// ── FLUXO DIÁRIO (últimos 30 dias) ──────────────────────
+// Agrupa pela coluna `data` (DATE já em fuso Brasília, setada via
+// getDataBrasil() em todos os inserts) para refletir a data real
+// da transação, não o momento de cadastro.
 const fluxoDiario = async (req, res) => {
   try {
     const userId = req.userId
+    const hoje = getDataBrasil()  // 'YYYY-MM-DD' em horário de Brasília
 
     const vendDiario = await queryWithUser(userId,
-      `SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') AS data,
-              SUM(valor) AS total
+      `SELECT data, SUM(valor) AS total
        FROM vendas
        WHERE user_id = $1
-         AND DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
-             >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '14 days'
-       GROUP BY DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
+         AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
+       GROUP BY data
        ORDER BY data`,
       [userId]
     )
 
     const despDiario = await queryWithUser(userId,
-      `SELECT DATE(criado_em AT TIME ZONE 'America/Sao_Paulo') AS data,
-              SUM(valor) AS total
+      `SELECT data, SUM(valor) AS total
        FROM despesas
        WHERE user_id = $1
-         AND DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
-             >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '14 days'
-       GROUP BY DATE(criado_em AT TIME ZONE 'America/Sao_Paulo')
+         AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
+       GROUP BY data
        ORDER BY data`,
       [userId]
     )
 
-    // Gera todos os dias do período usando fuso de Brasília,
-    // para que "hoje" no loop bata com o dia salvo pelo usuário.
+    // Gera todos os 30 dias do período em fuso de Brasília.
+    // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente.
     const dias = []
-    for (let i = 13; i >= 0; i--) {
+    for (let i = 29; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i)
       const dataStr = getDataBrasil(d)
-      // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente
       const venda = vendDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
       const desp  = despDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
-      const fat   = venda ? parseFloat(venda.total) : 0
-      const despTotal = desp ? parseFloat(desp.total) : 0
+      const fat       = venda ? parseFloat(venda.total) : 0
+      const despTotal = desp  ? parseFloat(desp.total)  : 0
       dias.push({
         data:        dataStr,
         faturamento: fat,

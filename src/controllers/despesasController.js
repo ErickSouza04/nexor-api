@@ -1,5 +1,6 @@
 // src/controllers/despesasController.js
 const { queryWithUser } = require('../config/database')
+const { getDataBrasil } = require('../utils/dateUtils')
 
 const listar = async (req, res) => {
   try {
@@ -58,7 +59,7 @@ const criar = async (req, res) => {
     const resultado = await queryWithUser(userId,
       `INSERT INTO despesas (user_id, valor, categoria, pagamento, descricao, data)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [userId, parseFloat(valor), categoria, pagamento, descricao || null, data || new Date()]
+      [userId, parseFloat(valor), categoria, pagamento, descricao || null, data || getDataBrasil()]
     )
 
     res.status(201).json({
