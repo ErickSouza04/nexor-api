@@ -5,6 +5,7 @@
 // NUNCA aceita user_id do body ou query params
 // ─────────────────────────────────────────────────────────
 const { queryWithUser, transaction } = require('../config/database')
+const { getDataBrasil } = require('../utils/dateUtils')
 
 // ── LISTAR vendas (com filtro de mês/ano) ───────────────
 const listar = async (req, res) => {
@@ -115,17 +116,24 @@ const deletar = async (req, res) => {
 const resumoDia = async (req, res) => {
   try {
     const userId = req.userId
-    const hoje = req.query.data || new Date().toISOString().split('T')[0]
+    // Fallback: usa fuso de Brasília quando o frontend não envia ?data=
+    // Antes usava new Date().toISOString() (UTC) — às 22h Brasil isso
+    // gerava o dia seguinte UTC, causando zero resultados no card "Hoje".
+    const hoje = req.query.data || getDataBrasil()
 
-    const resultado = await queryWithUser(userId,
-      `SELECT
+    const sql = `SELECT
         COALESCE(SUM(valor), 0)   AS total_vendas,
         COUNT(*)                   AS quantidade_vendas,
         COALESCE(AVG(valor), 0)   AS ticket_medio
        FROM vendas
-       WHERE user_id = $1 AND data = $2`,
-      [userId, hoje]
-    )
+       WHERE user_id = $1 AND data = $2`
+
+    console.log('[resumoDia] ?data param:', req.query.data ?? '(não enviado)')
+    console.log('[resumoDia] data usada na query:', hoje)
+
+    const resultado = await queryWithUser(userId, sql, [userId, hoje])
+
+    console.log('[resumoDia] rows retornadas:', resultado.rows[0])
 
     res.json({
       sucesso: true,
