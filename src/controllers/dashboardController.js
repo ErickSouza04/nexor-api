@@ -259,36 +259,50 @@ const comparacaoMeses = async (req, res) => {
   }
 }
 
-// ── FLUXO DIÁRIO (últimos 14 dias) ──────────────────────
+// ── FLUXO DIÁRIO (últimos 30 dias) ──────────────────────
 const fluxoDiario = async (req, res) => {
   try {
     const userId = req.userId
 
+    // Compara DATE com DATE para evitar cast implícito de TIMESTAMPTZ UTC
+    // que excluiria registros do mesmo dia salvos com fuso de Brasília.
+    // (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE  →  data atual em BRT
+    const SQL_RANGE = `
+      (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '29 days'
+    `
+
     const vendDiario = await queryWithUser(userId,
       `SELECT data, SUM(valor) AS total
-       FROM vendas WHERE user_id = $1 AND data >= NOW() - INTERVAL '14 days'
+       FROM vendas
+       WHERE user_id = $1 AND data >= ${SQL_RANGE}
        GROUP BY data ORDER BY data`,
       [userId]
     )
 
     const despDiario = await queryWithUser(userId,
       `SELECT data, SUM(valor) AS total
-       FROM despesas WHERE user_id = $1 AND data >= NOW() - INTERVAL '14 days'
+       FROM despesas
+       WHERE user_id = $1 AND data >= ${SQL_RANGE}
        GROUP BY data ORDER BY data`,
       [userId]
     )
 
-    // Gera todos os dias do período usando fuso de Brasília,
-    // para que "hoje" no loop bata com o dia salvo pelo usuário.
+    console.log('[fluxoDiario] vendas brutas:', JSON.stringify(vendDiario.rows))
+    console.log('[fluxoDiario] despesas brutas:', JSON.stringify(despDiario.rows))
+
+    // Gera os 30 dias do período usando fuso de Brasília, do mais antigo ao mais recente.
     const dias = []
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i)
-      const dataStr = getDataBrasil(d)
+    for (let i = 29; i >= 0; i--) {
+      // Subtrai i dias da data atual em BRT (não da data UTC do servidor)
+      const base = new Date()
+      base.setDate(base.getDate() - i)
+      const dataStr = getDataBrasil(base)
+
       // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente
       const venda = vendDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
       const desp  = despDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
-      const fat   = venda ? parseFloat(venda.total) : 0
-      const despTotal = desp ? parseFloat(desp.total) : 0
+      const fat       = venda ? parseFloat(venda.total) : 0
+      const despTotal = desp  ? parseFloat(desp.total)  : 0
       dias.push({
         data:        dataStr,
         faturamento: fat,
@@ -296,6 +310,8 @@ const fluxoDiario = async (req, res) => {
         lucro:       fat - despTotal
       })
     }
+
+    console.log('[fluxoDiario] dias mapeados (primeiro/último):', dias[0], dias[dias.length - 1])
 
     res.json({ sucesso: true, dados: dias })
 
