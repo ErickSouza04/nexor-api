@@ -399,6 +399,7 @@ const fluxoDiario = async (req, res) => {
   try {
     const userId = req.userId
     const hoje = getDataBrasil()  // 'YYYY-MM-DD' em horário de Brasília
+    console.log('[fluxoDiario] userId:', userId)
 
     const vendDiario = await queryWithUser(userId,
       `SELECT data, SUM(valor) AS total
@@ -409,6 +410,7 @@ const fluxoDiario = async (req, res) => {
        ORDER BY data`,
       [userId]
     )
+    console.log('[fluxoDiario] vendas encontradas:', vendDiario.rows.length)
 
     const despDiario = await queryWithUser(userId,
       `SELECT data, SUM(valor) AS total
