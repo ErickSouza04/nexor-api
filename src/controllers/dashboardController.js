@@ -426,6 +426,7 @@ const fluxoDiario = async (req, res) => {
     // Parte da data BRT (hoje) convertida para UTC puro, subtraindo dias
     // via setUTCDate para evitar drift de timezone.
     // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente.
+    console.log('[fluxoDiario] primeiro r.data:', vendDiario.rows[0]?.data, typeof vendDiario.rows[0]?.data)
     const dias = []
     const [anoH, mesH, diaH] = hoje.split('-').map(Number)
     const baseDate = new Date(Date.UTC(anoH, mesH - 1, diaH))
@@ -433,8 +434,18 @@ const fluxoDiario = async (req, res) => {
       const d = new Date(baseDate)
       d.setUTCDate(d.getUTCDate() - i)
       const dataStr = d.toISOString().split('T')[0]
-      const venda = vendDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
-      const desp  = despDiario.rows.find(r => String(r.data).slice(0, 10) === dataStr)
+      const venda = vendDiario.rows.find(r => {
+        const d = r.data instanceof Date
+          ? r.data.toISOString().slice(0, 10)
+          : String(r.data).slice(0, 10)
+        return d === dataStr
+      })
+      const desp = despDiario.rows.find(r => {
+        const d = r.data instanceof Date
+          ? r.data.toISOString().slice(0, 10)
+          : String(r.data).slice(0, 10)
+        return d === dataStr
+      })
       const fat       = venda ? parseFloat(venda.total) : 0
       const despTotal = desp  ? parseFloat(desp.total)  : 0
       dias.push({
