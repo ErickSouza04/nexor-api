@@ -402,7 +402,7 @@ const fluxoDiario = async (req, res) => {
     console.log('[fluxoDiario] userId:', userId)
 
     const vendDiario = await queryWithUser(userId,
-      `SELECT data, SUM(valor) AS total
+      `SELECT data, SUM(valor) AS total, SUM(COALESCE(cost_price_snapshot * quantidade, 0)) AS total_cogs
        FROM vendas
        WHERE user_id = $1
          AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
@@ -446,13 +446,14 @@ const fluxoDiario = async (req, res) => {
           : String(r.data).slice(0, 10)
         return d === dataStr
       })
-      const fat       = venda ? parseFloat(venda.total) : 0
-      const despTotal = desp  ? parseFloat(desp.total)  : 0
+      const fat       = venda ? parseFloat(venda.total)      : 0
+      const cogs      = venda ? parseFloat(venda.total_cogs) : 0
+      const despTotal = desp  ? parseFloat(desp.total)       : 0
       dias.push({
         data:        dataStr,
         faturamento: fat,
         despesas:    despTotal,
-        lucro:       fat - despTotal
+        lucro:       fat - cogs - despTotal
       })
     }
 
