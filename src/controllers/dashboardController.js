@@ -445,6 +445,7 @@ const fluxoDiario = async (req, res) => {
       })
     }
 
+    console.log('[fluxoDiario] amostra dias:', JSON.stringify(dias.filter(d => d.faturamento > 0)))
     res.json({ sucesso: true, dados: dias })
 
   } catch (err) {
