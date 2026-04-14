@@ -35,6 +35,13 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE
     `)
     await client.query(`UPDATE usuarios SET ativo = TRUE WHERE ativo IS NULL`)
+    // Colunas de produto/estoque na tabela vendas (migration_vendas_produto)
+    await client.query(`
+      ALTER TABLE vendas
+        ADD COLUMN IF NOT EXISTS product_id          UUID REFERENCES products(id),
+        ADD COLUMN IF NOT EXISTS cost_price_snapshot NUMERIC(10,2),
+        ADD COLUMN IF NOT EXISTS quantidade          INTEGER DEFAULT 1
+    `)
     console.log('✅ Migrações aplicadas com sucesso.')
   } catch (err) {
     console.error('⚠️  Erro nas migrações (não crítico):', err.message)

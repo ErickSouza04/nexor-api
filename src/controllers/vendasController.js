@@ -7,24 +7,29 @@
 const { queryWithUser, transaction } = require('../config/database')
 const { getDataBrasil } = require('../utils/dateUtils')
 
-// ── LISTAR vendas (com filtro de mês/ano) ───────────────
+// ── LISTAR vendas (com filtro de data, mês/ano) ─────────
 const listar = async (req, res) => {
   try {
     const userId = req.userId  // vem do token JWT, 100% seguro
-    const { mes, ano } = req.query
+    const { mes, ano, data } = req.query
     const limite = Math.min(Math.max(1, parseInt(req.query.limite) || 50), 200)
     const pagina = Math.max(1, parseInt(req.query.pagina) || 1)
     const offset = (pagina - 1) * limite
 
     let sql = `
-      SELECT id, valor, categoria, pagamento, produto, produto AS descricao, data, criado_em
+      SELECT id, valor, categoria, pagamento, produto, produto AS descricao,
+             product_id, quantidade, data, criado_em
       FROM vendas
       WHERE user_id = $1
     `
     const params = [userId]
     let paramIndex = 2
 
-    if (mes && ano) {
+    if (data) {
+      sql += ` AND data = $${paramIndex}`
+      params.push(data)
+      paramIndex += 1
+    } else if (mes && ano) {
       sql += ` AND EXTRACT(MONTH FROM data) = $${paramIndex} AND EXTRACT(YEAR FROM data) = $${paramIndex + 1}`
       params.push(parseInt(mes), parseInt(ano))
       paramIndex += 2
@@ -36,10 +41,13 @@ const listar = async (req, res) => {
 
     const resultado = await queryWithUser(userId, sql, params)
 
-    // Conta total para paginação respeitando o mesmo filtro mes/ano
+    // Conta total para paginação respeitando o mesmo filtro
     let countSql = `SELECT COUNT(*) FROM vendas WHERE user_id = $1`
     const countParams = [userId]
-    if (mes && ano) {
+    if (data) {
+      countSql += ` AND data = $2`
+      countParams.push(data)
+    } else if (mes && ano) {
       countSql += ` AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`
       countParams.push(parseInt(mes), parseInt(ano))
     }
@@ -66,13 +74,23 @@ const listar = async (req, res) => {
 const criar = async (req, res) => {
   try {
     const userId = req.userId
-    const { valor, categoria, pagamento, produto, descricao, data } = req.body
+    const { valor, categoria, pagamento, produto, descricao, data, product_id, quantidade } = req.body
 
     const resultado = await queryWithUser(userId,
-      `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO vendas
+         (user_id, valor, categoria, pagamento, produto, data, product_id, quantidade)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [userId, parseFloat(valor), categoria, pagamento, produto || descricao || null, data || getDataBrasil()]
+      [
+        userId,
+        parseFloat(valor),
+        categoria,
+        pagamento,
+        produto || descricao || null,
+        data || getDataBrasil(),
+        product_id || null,
+        quantidade ? parseInt(quantidade) : 1,
+      ]
     )
 
     res.status(201).json({
