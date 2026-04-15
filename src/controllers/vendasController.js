@@ -67,18 +67,26 @@ const criar = async (req, res) => {
   try {
     const userId = req.userId
     const { valor, categoria, pagamento, produto, descricao, data } = req.body
+    // Se produto_id não veio, tenta pelo nome na tabela 'produtos'
+    let costPriceSnapshot = null
     const produtoId = req.body.product_id || req.body.produto_id || null
 
-    // Se informado produto_id, busca o cost_price para snapshot de custo
-    let costPriceSnapshot = null
     if (produtoId) {
-      const produtoRes = await queryWithUser(userId,
+      // Fluxo WhatsApp/Estoque — tabela products
+      const r = await queryWithUser(userId,
         'SELECT cost_price FROM products WHERE id = $1 AND user_id = $2',
-        [produtoId, userId]
-      )
-      if (produtoRes.rows.length > 0 && produtoRes.rows[0].cost_price != null) {
-        costPriceSnapshot = parseFloat(produtoRes.rows[0].cost_price)
-      }
+        [produtoId, userId])
+      if (r.rows[0]?.cost_price != null)
+        costPriceSnapshot = parseFloat(r.rows[0].cost_price)
+
+    } else if (produto || descricao) {
+      // Fluxo frontend — busca por nome na tabela produtos
+      const nome = (produto || descricao).trim()
+      const r = await queryWithUser(userId,
+        'SELECT custo FROM produtos WHERE LOWER(nome) = LOWER($1) AND user_id = $2 LIMIT 1',
+        [nome, userId])
+      if (r.rows[0]?.custo != null)
+        costPriceSnapshot = parseFloat(r.rows[0].custo)
     }
 
     const resultado = await queryWithUser(userId,
