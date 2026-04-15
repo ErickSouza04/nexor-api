@@ -36,12 +36,11 @@ const resumoCompleto = async (req, res) => {
       [userId, mes, ano]
     )
 
-    // COGS: custo das mercadorias vendidas (somente vendas com cost_price_snapshot)
-    const cogsRes = await queryWithUser(userId,
-      `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS total_cogs
+    // Lucro por vendas: receita bruta menos custo de cada item vendido
+    const lucroVendasRes = await queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
        FROM vendas
        WHERE user_id = $1
-         AND cost_price_snapshot IS NOT NULL
          AND EXTRACT(MONTH FROM data) = $2
          AND EXTRACT(YEAR FROM data) = $3`,
       [userId, mes, ano]
@@ -60,27 +59,26 @@ const resumoCompleto = async (req, res) => {
        WHERE user_id = $1 AND EXTRACT(MONTH FROM data) = $2 AND EXTRACT(YEAR FROM data) = $3`,
       [userId, mesAnterior, anoAnterior]
     )
-    const cogsAntRes = await queryWithUser(userId,
-      `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS total_cogs
+    const lucroVendasAntRes = await queryWithUser(userId,
+      `SELECT COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
        FROM vendas
        WHERE user_id = $1
-         AND cost_price_snapshot IS NOT NULL
          AND EXTRACT(MONTH FROM data) = $2
          AND EXTRACT(YEAR FROM data) = $3`,
       [userId, mesAnterior, anoAnterior]
     )
 
-    // Calcular lucro real (faturamento - despesas operacionais - COGS)
+    // Calcular lucro real: lucro por vendas (receita - custo) - despesas operacionais
     const faturamento    = parseFloat(vendas.rows[0].faturamento)
     const totalDespesas  = parseFloat(despesas.rows[0].total_despesas)
-    const totalCogs      = parseFloat(cogsRes.rows[0].total_cogs)
-    const lucro          = faturamento - totalDespesas - totalCogs
+    const lucroVendas    = parseFloat(lucroVendasRes.rows[0].lucro_vendas)
+    const lucro          = lucroVendas - totalDespesas
     const margem         = faturamento > 0 ? (lucro / faturamento) * 100 : 0
 
     const fatAnt         = parseFloat(vendasAnt.rows[0].faturamento)
     const despAnt        = parseFloat(despesasAnt.rows[0].total)
-    const cogsAnt        = parseFloat(cogsAntRes.rows[0].total_cogs)
-    const lucroAnt       = fatAnt - despAnt - cogsAnt
+    const lucroVendasAnt = parseFloat(lucroVendasAntRes.rows[0].lucro_vendas)
+    const lucroAnt       = lucroVendasAnt - despAnt
 
     // Variação percentual
     const varFat   = fatAnt > 0 ? ((faturamento - fatAnt) / fatAnt) * 100 : 0
@@ -130,7 +128,9 @@ const indiceNexor = async (req, res) => {
 
     // 1. Margem atual (peso: 35 pts)
     const vendas   = await queryWithUser(userId,
-      `SELECT COALESCE(SUM(valor), 0) AS fat FROM vendas
+      `SELECT COALESCE(SUM(valor), 0) AS fat,
+              COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+       FROM vendas
        WHERE user_id=$1 AND EXTRACT(MONTH FROM data)=$2 AND EXTRACT(YEAR FROM data)=$3`,
       [userId, mes, ano]
     )
@@ -140,10 +140,11 @@ const indiceNexor = async (req, res) => {
       [userId, mes, ano]
     )
 
-    const fat   = parseFloat(vendas.rows[0].fat)
-    const desp  = parseFloat(despesas.rows[0].desp)
-    const lucro = fat - desp
-    const margem = fat > 0 ? (lucro / fat) * 100 : 0
+    const fat       = parseFloat(vendas.rows[0].fat)
+    const lucroVend = parseFloat(vendas.rows[0].lucro_vendas)
+    const desp      = parseFloat(despesas.rows[0].desp)
+    const lucro     = lucroVend - desp
+    const margem    = fat > 0 ? (lucro / fat) * 100 : 0
 
     // Pontos por margem (meta ideal = 35%)
     const ptsMargem = Math.min((margem / 35) * 35, 35)
@@ -215,6 +216,7 @@ const comparacaoMeses = async (req, res) => {
          EXTRACT(YEAR FROM data)  AS ano,
          EXTRACT(MONTH FROM data) AS mes,
          SUM(valor) AS faturamento,
+         SUM(valor - COALESCE(cost_price_snapshot, 0)) AS lucro_vendas,
          COUNT(*) AS qtd_vendas
        FROM vendas
        WHERE user_id = $1 AND data >= NOW() - INTERVAL '6 months'
@@ -242,14 +244,15 @@ const comparacaoMeses = async (req, res) => {
       const [ano, mes] = chave.split('-').map(Number)
       const v = resultado.rows.find(r => parseInt(r.ano) === ano && parseInt(r.mes) === mes)
       const d = despResult.rows.find(r => parseInt(r.ano) === ano && parseInt(r.mes) === mes)
-      const fat  = v ? parseFloat(v.faturamento) : 0
-      const desp = d ? parseFloat(d.total_despesas) : 0
+      const fat       = v ? parseFloat(v.faturamento)  : 0
+      const lucroVend = v ? parseFloat(v.lucro_vendas) : 0
+      const desp      = d ? parseFloat(d.total_despesas) : 0
       return {
         ano,
         mes,
         faturamento: fat,
         despesas:    desp,
-        lucro:       fat - desp,
+        lucro:       lucroVend - desp,
         qtd_vendas:  v ? parseInt(v.qtd_vendas) : 0
       }
     })
@@ -273,7 +276,8 @@ const resumoHoje = async (req, res) => {
     const userId = req.userId
     const dataHoje = getDataBrasil()
 
-    const [vendasRes, despesasRes, cogsRes, ontemVendasRes, ontemDespesasRes] = await Promise.all([
+    const dataOntem = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()
+    const [vendasRes, despesasRes, lucroVendasRes, ontemVendasRes, ontemDespesasRes, ontemLucroVendasRes] = await Promise.all([
       queryWithUser(userId,
         `SELECT COALESCE(SUM(valor), 0) AS receita, COUNT(*) AS qtd_vendas
          FROM vendas WHERE user_id = $1 AND data = $2`,
@@ -285,31 +289,37 @@ const resumoHoje = async (req, res) => {
         [userId, dataHoje]
       ),
       queryWithUser(userId,
-        `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS cogs
-         FROM vendas WHERE user_id = $1 AND data = $2 AND cost_price_snapshot IS NOT NULL`,
+        `SELECT COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+         FROM vendas WHERE user_id = $1 AND data = $2`,
         [userId, dataHoje]
       ),
       queryWithUser(userId,
         `SELECT COALESCE(SUM(valor), 0) AS receita
          FROM vendas WHERE user_id = $1 AND data = $2`,
-        [userId, (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()]
+        [userId, dataOntem]
       ),
       queryWithUser(userId,
         `SELECT COALESCE(SUM(valor), 0) AS despesas
          FROM despesas WHERE user_id = $1 AND data = $2`,
-        [userId, (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()]
+        [userId, dataOntem]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+         FROM vendas WHERE user_id = $1 AND data = $2`,
+        [userId, dataOntem]
       ),
     ])
 
-    const receita      = parseFloat(vendasRes.rows[0].receita)
-    const despesas     = parseFloat(despesasRes.rows[0].despesas)
-    const cogs         = parseFloat(cogsRes.rows[0].cogs)
-    const lucro        = receita - despesas - cogs
-    const margem       = receita > 0 ? (lucro / receita) * 100 : 0
+    const receita          = parseFloat(vendasRes.rows[0].receita)
+    const despesas         = parseFloat(despesasRes.rows[0].despesas)
+    const lucroVendas      = parseFloat(lucroVendasRes.rows[0].lucro_vendas)
+    const lucro            = lucroVendas - despesas
+    const margem           = receita > 0 ? (lucro / receita) * 100 : 0
 
-    const receitaOntem = parseFloat(ontemVendasRes.rows[0].receita)
-    const despOntem    = parseFloat(ontemDespesasRes.rows[0].despesas)
-    const lucroOntem   = receitaOntem - despOntem
+    const receitaOntem     = parseFloat(ontemVendasRes.rows[0].receita)
+    const despOntem        = parseFloat(ontemDespesasRes.rows[0].despesas)
+    const lucroVendasOntem = parseFloat(ontemLucroVendasRes.rows[0].lucro_vendas)
+    const lucroOntem       = lucroVendasOntem - despOntem
     const varLucro     = lucroOntem > 0 ? ((lucro - lucroOntem) / lucroOntem) * 100 : 0
     const varReceita   = receitaOntem > 0 ? ((receita - receitaOntem) / receitaOntem) * 100 : 0
 
@@ -402,7 +412,7 @@ const fluxoDiario = async (req, res) => {
     console.log('[fluxoDiario] userId:', userId)
 
     const vendDiario = await queryWithUser(userId,
-      `SELECT data, SUM(valor) AS total, SUM(COALESCE(cost_price_snapshot * quantidade, 0)) AS total_cogs
+      `SELECT data, SUM(valor) AS total, SUM(valor - COALESCE(cost_price_snapshot, 0)) AS lucro_vendas
        FROM vendas
        WHERE user_id = $1
          AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
@@ -446,14 +456,14 @@ const fluxoDiario = async (req, res) => {
           : String(r.data).slice(0, 10)
         return d === dataStr
       })
-      const fat       = venda ? parseFloat(venda.total)      : 0
-      const cogs      = venda ? parseFloat(venda.total_cogs) : 0
-      const despTotal = desp  ? parseFloat(desp.total)       : 0
+      const fat       = venda ? parseFloat(venda.total)        : 0
+      const lucroVend = venda ? parseFloat(venda.lucro_vendas) : 0
+      const despTotal = desp  ? parseFloat(desp.total)         : 0
       dias.push({
         data:        dataStr,
         faturamento: fat,
         despesas:    despTotal,
-        lucro:       fat - cogs - despTotal
+        lucro:       lucroVend - despTotal
       })
     }
 
