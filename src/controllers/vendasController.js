@@ -80,13 +80,27 @@ const criar = async (req, res) => {
         costPriceSnapshot = parseFloat(r.rows[0].cost_price)
 
     } else if (produto || descricao) {
-      // Fluxo frontend — busca por nome na tabela produtos
       const nome = (produto || descricao).trim()
-      const r = await queryWithUser(userId,
-        'SELECT custo FROM produtos WHERE LOWER(nome) = LOWER($1) AND user_id = $2 LIMIT 1',
+
+      // Tenta primeiro na tabela products (salvarProduto da Precificação)
+      const r1 = await queryWithUser(userId,
+        `SELECT cost_price FROM products
+         WHERE REPLACE(LOWER(name), '-', ' ') = REPLACE(LOWER($1), '-', ' ')
+         AND user_id = $2 LIMIT 1`,
         [nome, userId])
-      if (r.rows[0]?.custo != null)
-        costPriceSnapshot = parseFloat(r.rows[0].custo)
+
+      if (r1.rows[0]?.cost_price != null) {
+        costPriceSnapshot = parseFloat(r1.rows[0].cost_price)
+      } else {
+        // Fallback: tabela produtos (legada)
+        const r2 = await queryWithUser(userId,
+          `SELECT custo FROM produtos
+           WHERE REPLACE(LOWER(nome), '-', ' ') = REPLACE(LOWER($1), '-', ' ')
+           AND user_id = $2 LIMIT 1`,
+          [nome, userId])
+        if (r2.rows[0]?.custo != null)
+          costPriceSnapshot = parseFloat(r2.rows[0].custo)
+      }
     }
 
     const resultado = await queryWithUser(userId,
