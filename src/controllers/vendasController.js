@@ -67,12 +67,25 @@ const criar = async (req, res) => {
   try {
     const userId = req.userId
     const { valor, categoria, pagamento, produto, descricao, data } = req.body
+    const produtoId = req.body.product_id || req.body.produto_id || null
+
+    // Se informado produto_id, busca o cost_price para snapshot de custo
+    let costPriceSnapshot = null
+    if (produtoId) {
+      const produtoRes = await queryWithUser(userId,
+        'SELECT cost_price FROM products WHERE id = $1 AND user_id = $2',
+        [produtoId, userId]
+      )
+      if (produtoRes.rows.length > 0 && produtoRes.rows[0].cost_price != null) {
+        costPriceSnapshot = parseFloat(produtoRes.rows[0].cost_price)
+      }
+    }
 
     const resultado = await queryWithUser(userId,
-      `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data, product_id, cost_price_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [userId, parseFloat(valor), categoria, pagamento, produto || descricao || null, data || getDataBrasil()]
+      [userId, parseFloat(valor), categoria, pagamento, produto || descricao || null, data || getDataBrasil(), produtoId, costPriceSnapshot]
     )
 
     res.status(201).json({
