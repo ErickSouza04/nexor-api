@@ -22,6 +22,55 @@ const { getHistory, saveMessage: saveHistory } = require('../services/conversati
 const { detectWeakDayPattern } = require('../services/patternDetection')
 const { getDataBrasil, getDataOntemBrasil } = require('../utils/dateUtils')
 
+// ── Estado de venda avulsa pendente ─────────────────────
+// Persiste em whatsapp_conversation_history com role='pending_venda'
+// para reutilizar o mesmo mecanismo de histórico já existente.
+
+async function getPendingVenda(userId, phone) {
+  const result = await query(
+    `SELECT content FROM whatsapp_conversation_history
+     WHERE user_id = $1 AND phone = $2 AND role = 'pending_venda'
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId, phone]
+  )
+  if (!result.rows.length) return null
+  try { return JSON.parse(result.rows[0].content) } catch { return null }
+}
+
+async function setPendingVenda(userId, phone, pendingVenda) {
+  await clearPendingVenda(userId, phone)
+  await query(
+    `INSERT INTO whatsapp_conversation_history (user_id, phone, role, content)
+     VALUES ($1, $2, 'pending_venda', $3)`,
+    [userId, phone, JSON.stringify(pendingVenda)]
+  )
+}
+
+async function clearPendingVenda(userId, phone) {
+  await query(
+    `DELETE FROM whatsapp_conversation_history
+     WHERE user_id = $1 AND phone = $2 AND role = 'pending_venda'`,
+    [userId, phone]
+  )
+}
+
+// Extrai valor numérico de strings como "150", "R$150", "150,00", "1.500,00"
+function extrairValorNumerico(text) {
+  const limpo = (text || '').replace(/R\$?\s*/i, '').trim()
+  let normalizado
+  if (limpo.includes(',') && limpo.includes('.')) {
+    // Formato milhar+decimal brasileiro: 1.500,50 → 1500.50
+    normalizado = limpo.replace(/\./g, '').replace(',', '.')
+  } else if (limpo.includes(',')) {
+    // Decimal brasileiro: 150,50 → 150.50
+    normalizado = limpo.replace(',', '.')
+  } else {
+    normalizado = limpo
+  }
+  const valor = parseFloat(normalizado)
+  return isNaN(valor) || valor <= 0 ? null : valor
+}
+
 // ── Mensagens fixas ──────────────────────────────────────
 const MSG_CADASTRO = '👋 Para usar o assistente financeiro via WhatsApp, primeiro vincule este número em *Configurações → WhatsApp* no app Nexor.'
 const MSG_UPGRADE  = '📊 O assistente via WhatsApp é exclusivo do Plano Plus. Acesse o app Nexor para fazer upgrade.'
@@ -239,7 +288,7 @@ async function handleDespesa(userId, parsed, userContext) {
   ].join('\n')
 }
 
-async function handleVenda(userId, parsed, userContext) {
+async function handleVenda(userId, parsed, userContext, phone) {
   const nomeProduto = parsed.produto
   const quantidade  = parsed.quantidade || 1
   const data        = resolverData(parsed.data)
@@ -255,7 +304,16 @@ async function handleVenda(userId, parsed, userContext) {
     )
 
     if (!prodResult.rows.length) {
-      return `❌ Não encontrei o produto *${nomeProduto}* no seu estoque. Verifique o nome e tente novamente.`
+      await setPendingVenda(userId, phone, {
+        tipo: 'venda_avulsa',
+        descricao: nomeProduto,
+        quantidade: quantidade,
+        aguardando: 'valor',
+      })
+      return (
+        `Não encontrei *${nomeProduto}* no seu estoque cadastrado.\n` +
+        `Quer registrar como venda avulsa? Se sim, qual foi o valor total recebido? (ex: 150,00)`
+      )
     }
 
     const produto      = prodResult.rows[0]
@@ -942,9 +1000,53 @@ const handleWebhook = async (req, res) => {
     let history = []
     try {
       history = await getHistory(userId, phoneNorm)
+      // Remove registros internos de estado antes de passar ao parser
+      history = history.filter(m => m.role !== 'pending_venda')
       console.log('[WHATSAPP] histórico carregado:', history.length, 'mensagens')
     } catch (err) {
       console.warn('[WHATSAPP] Falha ao carregar histórico (continuando sem):', err.message)
+    }
+
+    // ── Verifica se há venda avulsa pendente aguardando valor ─
+    let pendingVenda = null
+    try {
+      pendingVenda = await getPendingVenda(userId, phoneNorm)
+      console.log('[WHATSAPP] pendingVenda:', pendingVenda)
+    } catch (err) {
+      console.warn('[WHATSAPP] Falha ao carregar pendingVenda (continuando sem):', err.message)
+    }
+
+    if (pendingVenda?.aguardando === 'valor') {
+      const valorAvulso = extrairValorNumerico(messageText)
+      let respostaAvulsa
+
+      if (valorAvulso !== null) {
+        await queryWithUser(userId,
+          `INSERT INTO vendas (user_id, valor, categoria, pagamento, produto, data, quantidade)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [userId, valorAvulso, 'Produto', 'Pix', pendingVenda.descricao, resolverData('hoje'), pendingVenda.quantidade || 1]
+        )
+        await clearPendingVenda(userId, phoneNorm)
+        respostaAvulsa = [
+          '✅ Venda avulsa registrada!',
+          `Descrição: ${pendingVenda.descricao}`,
+          `Valor: ${fmt(valorAvulso)}`,
+          '(Sem vínculo com estoque)',
+        ].join('\n')
+      } else {
+        await clearPendingVenda(userId, phoneNorm)
+        respostaAvulsa = 'Ok, venda cancelada. Me avisa quando quiser registrar!'
+      }
+
+      try {
+        await saveHistory(userId, phoneNorm, 'user', messageText)
+        await saveHistory(userId, phoneNorm, 'assistant', respostaAvulsa)
+      } catch (err) {
+        console.warn('[WHATSAPP] Falha ao salvar histórico (não crítico):', err.message)
+      }
+      console.log('[WHATSAPP] enviando resposta venda avulsa para', phoneNorm, ':', respostaAvulsa.slice(0, 60))
+      await sendMessage(phoneNorm, respostaAvulsa, messageId)
+      return
     }
 
     let resposta
@@ -983,7 +1085,7 @@ const handleWebhook = async (req, res) => {
             break
 
           case 'venda':
-            resposta = await handleVenda(userId, parsed, userContext)
+            resposta = await handleVenda(userId, parsed, userContext, phoneNorm)
             break
 
           case 'consulta_estoque':
