@@ -25,6 +25,13 @@ const criarProduto = async (req, res) => {
 
     console.log('[stock/criarProduto] campos mapeados:', { name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price })
 
+    if (!name) {
+      return res.status(400).json({ sucesso: false, erro: 'O campo name (nome do produto) é obrigatório' })
+    }
+    if (cost_price == null || isNaN(parseFloat(cost_price))) {
+      return res.status(400).json({ sucesso: false, erro: 'O campo cost_price (preço de custo) é obrigatório para rastrear o lucro real das vendas' })
+    }
+
     const resultado = await queryWithUser(userId,
       `INSERT INTO products
          (user_id, name, brand, unit, current_stock, min_stock_alert, cost_price, sale_price)

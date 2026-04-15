@@ -82,9 +82,11 @@ const criar = async (req, res) => {
     } else if (produto || descricao) {
       // Fluxo frontend — busca por nome na tabela produtos
       const nome = (produto || descricao).trim()
+      // Normaliza hífen e espaço para que "Bullmaster-gold" == "Bullmaster gold"
+      const nomeNorm = nome.toLowerCase().replace(/-/g, ' ')
       const r = await queryWithUser(userId,
-        'SELECT custo FROM produtos WHERE LOWER(nome) = LOWER($1) AND user_id = $2 LIMIT 1',
-        [nome, userId])
+        "SELECT custo FROM produtos WHERE REPLACE(LOWER(nome), '-', ' ') = $1 AND user_id = $2 LIMIT 1",
+        [nomeNorm, userId])
       if (r.rows[0]?.custo != null)
         costPriceSnapshot = parseFloat(r.rows[0].custo)
     }
