@@ -4,6 +4,7 @@
 // Configura Express, segurança, rate limiting e rotas
 // ─────────────────────────────────────────────────────────
 require('dotenv').config()
+const path        = require('path')
 const express     = require('express')
 const helmet      = require('helmet')
 const cors        = require('cors')
@@ -156,15 +157,19 @@ app.use('/api/stripe/webhook',  express.raw({ type: 'application/json' }))  // n
 app.use(express.json({ limit: '10kb' }))
 app.use(express.urlencoded({ extended: false, limit: '10kb' }))
 
-// ── 5. ROTAS ─────────────────────────────────────────────
+// ── 5. FRONTEND ESTÁTICO ─────────────────────────────────
+// Serve public/index.html e assets em /
+app.use(express.static(path.join(__dirname, '../public')))
+
+// ── 6. ROTAS ─────────────────────────────────────────────
 app.use('/api', routes)
 
-// ── 6. ROTA NÃO ENCONTRADA ───────────────────────────────
+// ── 7. ROTA NÃO ENCONTRADA ───────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ sucesso: false, erro: 'Rota não encontrada' })
 })
 
-// ── 7. HANDLER GLOBAL DE ERROS ───────────────────────────
+// ── 8. HANDLER GLOBAL DE ERROS ───────────────────────────
 app.use((err, req, res, next) => {
   // Erro de CORS — não expõe detalhes ao cliente
   if (err.message?.startsWith('CORS bloqueado')) {

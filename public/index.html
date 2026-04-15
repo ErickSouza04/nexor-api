@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Nexor</title>
+  <style>
+    :root {
+      --bg:       #0d0d0d;
+      --surface:  #161616;
+      --surface2: #1e1e1e;
+      --border:   #2a2a2a;
+      --text:     #f0f0f0;
+      --muted:    #888;
+      --green:    #00e5a0;
+      --green-dim:#00b87d;
+      --red:      #ff5555;
+      --yellow:   #f0b429;
+      --radius:   12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Utilitários ─────────────────────────────────────── */
+    .hidden { display: none !important; }
+
+    .btn {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:active { opacity: .75; }
+    .btn-primary { background: var(--green); color: #000; width: 100%; }
+    .btn-ghost   { background: transparent; color: var(--muted); border: 1px solid var(--border); width: 100%; }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+    input:focus { border-color: var(--green); }
+    input::placeholder { color: var(--muted); }
+
+    /* ── Tela de Auth ─────────────────────────────────────── */
+    #tela-auth {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .auth-box {
+      width: 100%;
+      max-width: 380px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+    }
+
+    .auth-logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .auth-logo span {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: -1px;
+    }
+
+    .auth-box h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .auth-box form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .auth-link {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .auth-link a { color: var(--green); cursor: pointer; text-decoration: none; }
+
+    .auth-erro {
+      background: rgba(255,85,85,.12);
+      border: 1px solid rgba(255,85,85,.3);
+      color: var(--red);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* ── Tela principal ───────────────────────────────────── */
+    #tela-app {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 480px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Cabeçalho */
+    #app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    #app-header .logo { font-size: 20px; font-weight: 800; color: var(--green); }
+    #app-header .usuario-nome { font-size: 13px; color: var(--muted); }
+
+    #btn-logout {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    #btn-logout:hover { color: var(--red); }
+
+    /* Conteúdo das abas */
+    .aba {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    /* Navegação inferior */
+    #nav-bottom {
+      display: flex;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .nav-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 10px 4px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: color .15s;
+    }
+    .nav-btn .nav-icon { font-size: 18px; }
+    .nav-btn.ativa { color: var(--green); }
+
+    /* ── Dashboard ────────────────────────────────────────── */
+    .hero-card {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .hero-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 8px;
+    }
+
+    .hero-valor {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .hero-valor.negativo { color: var(--red); }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .hero-meta span {
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--bg);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .hero-atualizado {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .mini-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .mini-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .mc-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+    .mc-valor {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .mc-var {
+      font-size: 11px;
+      margin-top: 3px;
+    }
+    .mc-var.up   { color: var(--green); }
+    .mc-var.down { color: var(--red); }
+
+    /* Últimos registros */
+    .secao-titulo {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 10px;
+    }
+
+    .registro-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .registro-item:last-child { border-bottom: none; }
+    .reg-desc { font-size: 14px; }
+    .reg-tipo { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .reg-valor { font-size: 15px; font-weight: 700; }
+    .reg-valor.venda   { color: var(--green); }
+    .reg-valor.despesa { color: var(--red); }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+      color: transparent !important;
+      user-select: none;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Outras abas ──────────────────────────────────────── */
+    .aba-placeholder {
+      text-align: center;
+      padding-top: 60px;
+      color: var(--muted);
+    }
+    .aba-placeholder .icone { font-size: 48px; margin-bottom: 12px; }
+    .aba-placeholder p { font-size: 15px; }
+
+    /* Form de registro (Vendas / Despesas) */
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .lista-itens { margin-top: 20px; }
+
+    .item-lista {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .item-lista:last-child { border-bottom: none; }
+    .item-desc { font-size: 14px; }
+    .item-data { font-size: 11px; color: var(--muted); }
+    .item-valor { font-size: 15px; font-weight: 700; }
+
+    .feedback-ok   { color: var(--green); font-size: 14px; margin-top: 8px; }
+    .feedback-erro { color: var(--red);   font-size: 14px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TELA DE AUTENTICAÇÃO
+═══════════════════════════════════════════════════════════ -->
+<div id="tela-auth">
+  <div class="auth-box">
+    <div class="auth-logo"><span>Nexor</span></div>
+
+    <!-- Login -->
+    <div id="form-login-wrap">
+      <h2>Entrar</h2>
+      <form id="form-login">
+        <input type="email"    id="login-email" placeholder="E-mail" required autocomplete="email">
+        <input type="password" id="login-senha" placeholder="Senha"  required autocomplete="current-password">
+        <button class="btn btn-primary" type="submit">Entrar</button>
+      </form>
+      <div id="login-erro" class="auth-erro hidden"></div>
+      <p class="auth-link">Não tem conta? <a id="ir-cadastro">Criar conta grátis</a></p>
+    </div>
+
+    <!-- Cadastro -->
+    <div id="form-cadastro-wrap" class="hidden">
+      <h2>Criar conta</h2>
+      <form id="form-cadastro">
+        <input type="text"     id="cad-nome"  placeholder="Seu nome"  required>
+        <input type="email"    id="cad-email" placeholder="E-mail"    required autocomplete="email">
+        <input type="password" id="cad-senha" placeholder="Senha (mín. 6 caracteres)" required minlength="6">
+        <button class="btn btn-primary" type="submit">Criar conta grátis</button>
+      </form>
+      <div id="cadastro-erro" class="auth-erro hidden"></div>
+      <p class="auth-link">Já tem conta? <a id="ir-login">Fazer login</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TELA PRINCIPAL DO APP
+═══════════════════════════════════════════════════════════ -->
+<div id="tela-app" class="hidden">
+
+  <!-- Cabeçalho -->
+  <div id="app-header">
+    <span class="logo">Nexor</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="usuario-nome" class="usuario-nome"></span>
+      <button id="btn-logout">Sair</button>
+    </div>
+  </div>
+
+  <!-- ── Aba: Dashboard ─────────────────────────────────── -->
+  <section id="aba-dashboard" class="aba">
+
+    <!-- Hero card: Lucro Real — Hoje -->
+    <div class="hero-card">
+      <div class="hero-label">Lucro Real — Hoje</div>
+      <div id="hero-lucro" class="hero-valor skeleton">R$ 0,00</div>
+      <div class="hero-meta">
+        <span id="hero-receita">Receita: —</span>
+        <span id="hero-despesas">Desp.: —</span>
+        <span id="hero-margem">Margem: —</span>
+        <span id="hero-qtd">0 venda(s)</span>
+      </div>
+      <div id="hero-atualizado" class="hero-atualizado">—</div>
+    </div>
+
+    <!-- Mini cards: resumo do mês -->
+    <div class="mini-cards">
+      <div class="mini-card">
+        <div class="mc-label">Faturamento Mês</div>
+        <div id="mc-faturamento" class="mc-valor skeleton">R$ 0,00</div>
+        <div id="mc-fat-var" class="mc-var"></div>
+      </div>
+      <div class="mini-card">
+        <div class="mc-label">Lucro do Mês</div>
+        <div id="mc-lucro" class="mc-valor skeleton">R$ 0,00</div>
+        <div id="mc-lucro-var" class="mc-var"></div>
+      </div>
+      <div class="mini-card">
+        <div class="mc-label">Despesas Mês</div>
+        <div id="mc-despesas" class="mc-valor skeleton">R$ 0,00</div>
+        <div id="mc-desp-var" class="mc-var"></div>
+      </div>
+      <div class="mini-card">
+        <div class="mc-label">Margem Mensal</div>
+        <div id="mc-margem" class="mc-valor skeleton">0%</div>
+      </div>
+    </div>
+
+    <!-- Últimos registros -->
+    <div class="secao-titulo">Últimos registros</div>
+    <div id="ultimos-registros">
+      <div style="color:var(--muted);font-size:14px;padding:16px 0">Carregando…</div>
+    </div>
+
+  </section>
+
+  <!-- ── Aba: Vendas ────────────────────────────────────── -->
+  <section id="aba-vendas" class="aba hidden">
+    <div style="margin-bottom:20px">
+      <div class="secao-titulo" style="margin-bottom:14px">Registrar Venda</div>
+      <form id="form-venda">
+        <div class="form-group">
+          <label>Descrição / Produto</label>
+          <input type="text" id="venda-produto" placeholder="Ex: Bolo de chocolate" required>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="venda-valor" placeholder="0,00" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Categoria (opcional)</label>
+          <input type="text" id="venda-categoria" placeholder="Ex: Alimentos">
+        </div>
+        <button class="btn btn-primary" type="submit">Registrar Venda</button>
+        <div id="venda-feedback"></div>
+      </form>
+    </div>
+    <div class="secao-titulo">Vendas recentes</div>
+    <div id="lista-vendas" class="lista-itens">
+      <div style="color:var(--muted);font-size:14px;padding:16px 0">Carregando…</div>
+    </div>
+  </section>
+
+  <!-- ── Aba: Despesas ──────────────────────────────────── -->
+  <section id="aba-despesas" class="aba hidden">
+    <div style="margin-bottom:20px">
+      <div class="secao-titulo" style="margin-bottom:14px">Registrar Despesa</div>
+      <form id="form-despesa">
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" id="desp-descricao" placeholder="Ex: Fornecedor de farinha" required>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="number" id="desp-valor" placeholder="0,00" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Categoria (opcional)</label>
+          <input type="text" id="desp-categoria" placeholder="Ex: Insumos">
+        </div>
+        <button class="btn btn-primary" type="submit">Registrar Despesa</button>
+        <div id="despesa-feedback"></div>
+      </form>
+    </div>
+    <div class="secao-titulo">Despesas recentes</div>
+    <div id="lista-despesas" class="lista-itens">
+      <div style="color:var(--muted);font-size:14px;padding:16px 0">Carregando…</div>
+    </div>
+  </section>
+
+  <!-- ── Aba: Metas ─────────────────────────────────────── -->
+  <section id="aba-metas" class="aba hidden">
+    <div class="aba-placeholder">
+      <div class="icone">🎯</div>
+      <p>Metas do mês</p>
+    </div>
+    <div id="lista-metas" style="margin-top:20px"></div>
+  </section>
+
+  <!-- Navegação inferior -->
+  <nav id="nav-bottom">
+    <button class="nav-btn ativa" data-aba="dashboard">
+      <span class="nav-icon">📊</span>
+      Dashboard
+    </button>
+    <button class="nav-btn" data-aba="vendas">
+      <span class="nav-icon">💰</span>
+      Vendas
+    </button>
+    <button class="nav-btn" data-aba="despesas">
+      <span class="nav-icon">📤</span>
+      Despesas
+    </button>
+    <button class="nav-btn" data-aba="metas">
+      <span class="nav-icon">🎯</span>
+      Metas
+    </button>
+  </nav>
+
+</div><!-- /#tela-app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// Nexor App — Frontend
+// ═══════════════════════════════════════════════════════════
+
+// ── Config ─────────────────────────────────────────────────
+// Quando servido pelo próprio Express, usa caminho relativo.
+// Em desenvolvimento (Vite / live-server numa porta diferente),
+// aponta para o servidor local da API.
+const API = window.location.port === '5173' || window.location.port === '5500'
+  ? 'http://localhost:3000/api'
+  : '/api';
+
+// ── Formatação ─────────────────────────────────────────────
+const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const pct = v => (Number(v) || 0).toFixed(1) + '%';
+const varStr = v => {
+  const n = Number(v) || 0;
+  return n >= 0 ? '▲ ' + n.toFixed(1) + '%' : '▼ ' + Math.abs(n).toFixed(1) + '%';
+};
+
+// ── Autenticação ───────────────────────────────────────────
+const getToken = ()   => localStorage.getItem('nexor_token');
+const setToken = t    => localStorage.setItem('nexor_token', t);
+const getUser  = ()   => { try { return JSON.parse(localStorage.getItem('nexor_user') || '{}') } catch { return {} } };
+const setUser  = u    => localStorage.setItem('nexor_user', JSON.stringify(u));
+const clearAuth = ()  => { localStorage.removeItem('nexor_token'); localStorage.removeItem('nexor_user'); };
+
+// ── Helper de fetch ────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const token = getToken();
+  try {
+    const res = await fetch(API + path, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      },
+      ...opts,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+    if (res.status === 401) { deslogar(); return null; }
+    return await res.json();
+  } catch (e) {
+    console.error('[nexor] fetch error:', path, e);
+    return null;
+  }
+}
+
+// ── Autenticação — formulários ────────────────────────────
+document.getElementById('ir-cadastro').addEventListener('click', () => {
+  document.getElementById('form-login-wrap').classList.add('hidden');
+  document.getElementById('form-cadastro-wrap').classList.remove('hidden');
+});
+document.getElementById('ir-login').addEventListener('click', () => {
+  document.getElementById('form-cadastro-wrap').classList.add('hidden');
+  document.getElementById('form-login-wrap').classList.remove('hidden');
+});
+
+document.getElementById('form-login').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const erroEl = document.getElementById('login-erro');
+  erroEl.classList.add('hidden');
+
+  const data = await apiFetch('/auth/login', { method: 'POST', body: { email, senha } });
+  if (data?.sucesso) {
+    setToken(data.token);
+    setUser(data.usuario);
+    iniciarApp();
+  } else {
+    erroEl.textContent = data?.erro || 'E-mail ou senha incorretos.';
+    erroEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('form-cadastro').addEventListener('submit', async e => {
+  e.preventDefault();
+  const nome  = document.getElementById('cad-nome').value.trim();
+  const email = document.getElementById('cad-email').value.trim();
+  const senha = document.getElementById('cad-senha').value;
+  const erroEl = document.getElementById('cadastro-erro');
+  erroEl.classList.add('hidden');
+
+  const data = await apiFetch('/auth/cadastrar', { method: 'POST', body: { nome, email, senha } });
+  if (data?.sucesso) {
+    setToken(data.token);
+    setUser(data.usuario);
+    iniciarApp();
+  } else {
+    erroEl.textContent = data?.erro || 'Erro ao criar conta. Tente novamente.';
+    erroEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('btn-logout').addEventListener('click', deslogar);
+
+function deslogar() {
+  sairDashboard();
+  clearAuth();
+  document.getElementById('tela-app').classList.add('hidden');
+  document.getElementById('tela-auth').classList.remove('hidden');
+}
+
+// ── Inicialização do App ───────────────────────────────────
+function iniciarApp() {
+  document.getElementById('tela-auth').classList.add('hidden');
+  document.getElementById('tela-app').classList.remove('hidden');
+
+  const user = getUser();
+  document.getElementById('usuario-nome').textContent = user.nome || '';
+
+  mudarAba('dashboard');
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+
+// Atualiza o hero card e os mini cards com os dados mais recentes.
+// Chamada imediatamente ao entrar no Dashboard e depois a cada 60 s
+// pelo mecanismo de polling abaixo.
+async function iniciarDashboard() {
+  // 1. Hero card — endpoint leve, específico para polling
+  const hoje = await apiFetch('/dashboard/hoje');
+  if (hoje?.sucesso) {
+    const d = hoje.dados;
+    const heroEl = document.getElementById('hero-lucro');
+    heroEl.textContent = brl(d.lucro);
+    heroEl.classList.remove('skeleton');
+    heroEl.classList.toggle('negativo', d.lucro < 0);
+
+    document.getElementById('hero-receita').textContent  = 'Receita: '   + brl(d.receita);
+    document.getElementById('hero-despesas').textContent = 'Desp.: '     + brl(d.total_despesas);
+    document.getElementById('hero-margem').textContent   = 'Margem: '    + pct(d.margem);
+    document.getElementById('hero-qtd').textContent      = d.qtd_vendas  + ' venda(s)';
+    document.getElementById('hero-atualizado').textContent = d.atualizado_em
+      ? '⏱ ' + d.atualizado_em
+      : '';
+  }
+
+  // 2. Mini cards — resumo mensal completo
+  const resumo = await apiFetch('/dashboard/resumo');
+  if (resumo?.sucesso) {
+    const d = resumo.dados;
+    const fat = document.getElementById('mc-faturamento');
+    const luc = document.getElementById('mc-lucro');
+    const des = document.getElementById('mc-despesas');
+    const mar = document.getElementById('mc-margem');
+
+    fat.textContent = brl(d.faturamento);        fat.classList.remove('skeleton');
+    luc.textContent = brl(d.lucro);              luc.classList.remove('skeleton');
+    des.textContent = brl(d.total_despesas);     des.classList.remove('skeleton');
+    mar.textContent = pct(d.margem);             mar.classList.remove('skeleton');
+
+    const setVar = (id, val) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = varStr(val);
+      el.className = 'mc-var ' + (val >= 0 ? 'up' : 'down');
+    };
+    setVar('mc-fat-var',   d.variacao?.faturamento);
+    setVar('mc-lucro-var', d.variacao?.lucro);
+    setVar('mc-desp-var',  d.variacao?.despesas);
+  }
+
+  // 3. Últimos registros
+  const regs = await apiFetch('/dashboard/ultimos-registros');
+  if (regs?.sucesso) {
+    const container = document.getElementById('ultimos-registros');
+    if (!regs.dados.length) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0">Nenhum registro encontrado.</div>';
+      return;
+    }
+    container.innerHTML = regs.dados.map(r => {
+      const sinal = r.tipo === 'venda' ? '+' : '-';
+      const cls   = r.tipo === 'venda' ? 'venda' : 'despesa';
+      const data  = new Date(r.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+      return `<div class="registro-item">
+        <div>
+          <div class="reg-desc">${r.descricao || '—'}</div>
+          <div class="reg-tipo">${r.tipo === 'venda' ? 'Venda' : 'Despesa'} · ${data}</div>
+        </div>
+        <div class="reg-valor ${cls}">${sinal}${brl(r.valor)}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// POLLING DO DASHBOARD
+//
+// Requisitos atendidos:
+//   1. setInterval iniciado ao entrar na aba Dashboard
+//   2. clearInterval ao sair do Dashboard
+//   3. Não roda em outras abas (vendas, despesas, metas)
+//   4. Não duplica o interval — a guarda _dashInterval
+//      garante que um segundo entrar() antes do sair()
+//      anterior não cria dois timers simultâneos
+// ═══════════════════════════════════════════════════════════
+let _dashInterval = null;
+
+function entrarDashboard() {
+  iniciarDashboard(); // carrega dados imediatamente
+
+  if (!_dashInterval) { // evita duplicar caso chamado duas vezes
+    _dashInterval = setInterval(iniciarDashboard, 60_000); // 60 s
+  }
+}
+
+function sairDashboard() {
+  clearInterval(_dashInterval);
+  _dashInterval = null;
+}
+
+// ── Vendas ─────────────────────────────────────────────────
+async function carregarVendas() {
+  const data = await apiFetch('/vendas');
+  const container = document.getElementById('lista-vendas');
+  if (!data?.sucesso || !data.dados?.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0">Nenhuma venda registrada.</div>';
+    return;
+  }
+  container.innerHTML = data.dados.slice(0, 20).map(v => {
+    const dt = new Date(v.criado_em).toLocaleDateString('pt-BR');
+    return `<div class="item-lista">
+      <div>
+        <div class="item-desc">${v.produto || v.descricao || '—'}</div>
+        <div class="item-data">${dt}</div>
+      </div>
+      <div class="item-valor" style="color:var(--green)">${brl(v.valor)}</div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('form-venda').addEventListener('submit', async e => {
+  e.preventDefault();
+  const produto    = document.getElementById('venda-produto').value.trim();
+  const valor      = parseFloat(document.getElementById('venda-valor').value);
+  const categoria  = document.getElementById('venda-categoria').value.trim();
+  const fb = document.getElementById('venda-feedback');
+
+  const data = await apiFetch('/vendas', { method: 'POST', body: { produto, valor, categoria: categoria || undefined } });
+  if (data?.sucesso) {
+    fb.className = 'feedback-ok';
+    fb.textContent = '✓ Venda registrada!';
+    document.getElementById('form-venda').reset();
+    carregarVendas();
+    setTimeout(() => fb.textContent = '', 3000);
+  } else {
+    fb.className = 'feedback-erro';
+    fb.textContent = data?.erro || 'Erro ao registrar venda.';
+  }
+});
+
+// ── Despesas ───────────────────────────────────────────────
+async function carregarDespesas() {
+  const data = await apiFetch('/despesas');
+  const container = document.getElementById('lista-despesas');
+  if (!data?.sucesso || !data.dados?.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0">Nenhuma despesa registrada.</div>';
+    return;
+  }
+  container.innerHTML = data.dados.slice(0, 20).map(d => {
+    const dt = new Date(d.criado_em).toLocaleDateString('pt-BR');
+    return `<div class="item-lista">
+      <div>
+        <div class="item-desc">${d.descricao || '—'}</div>
+        <div class="item-data">${dt}</div>
+      </div>
+      <div class="item-valor" style="color:var(--red)">${brl(d.valor)}</div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('form-despesa').addEventListener('submit', async e => {
+  e.preventDefault();
+  const descricao = document.getElementById('desp-descricao').value.trim();
+  const valor     = parseFloat(document.getElementById('desp-valor').value);
+  const categoria = document.getElementById('desp-categoria').value.trim();
+  const fb = document.getElementById('despesa-feedback');
+
+  const data = await apiFetch('/despesas', { method: 'POST', body: { descricao, valor, categoria: categoria || undefined } });
+  if (data?.sucesso) {
+    fb.className = 'feedback-ok';
+    fb.textContent = '✓ Despesa registrada!';
+    document.getElementById('form-despesa').reset();
+    carregarDespesas();
+    setTimeout(() => fb.textContent = '', 3000);
+  } else {
+    fb.className = 'feedback-erro';
+    fb.textContent = data?.erro || 'Erro ao registrar despesa.';
+  }
+});
+
+// ── Metas ──────────────────────────────────────────────────
+async function carregarMetas() {
+  const data = await apiFetch('/metas');
+  const container = document.getElementById('lista-metas');
+  if (!data?.sucesso || !data.dados?.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:16px 0;text-align:center">Nenhuma meta cadastrada.</div>';
+    return;
+  }
+  container.innerHTML = data.dados.map(m => `
+    <div class="mini-card" style="margin-bottom:12px">
+      <div class="mc-label">${m.mes}/${m.ano}</div>
+      <div class="mc-valor">${brl(m.valor_meta)}</div>
+      <div style="margin-top:8px;height:6px;background:var(--border);border-radius:4px">
+        <div style="height:100%;background:var(--green);border-radius:4px;width:${Math.min(m.progresso || 0, 100)}%"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${(m.progresso || 0).toFixed(0)}% atingido</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// NAVEGAÇÃO ENTRE ABAS
+// ═══════════════════════════════════════════════════════════
+let _abaAtual = null;
+
+function mudarAba(aba) {
+  // Para o polling se estiver saindo do Dashboard
+  if (_abaAtual === 'dashboard' && aba !== 'dashboard') {
+    sairDashboard();
+  }
+
+  // Atualiza UI
+  document.querySelectorAll('.aba').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('ativa'));
+  document.getElementById('aba-' + aba).classList.remove('hidden');
+  const navBtn = document.querySelector(`.nav-btn[data-aba="${aba}"]`);
+  if (navBtn) navBtn.classList.add('ativa');
+
+  _abaAtual = aba;
+
+  // Ação específica de cada aba
+  if (aba === 'dashboard') {
+    entrarDashboard(); // inicia polling (não duplica)
+  } else if (aba === 'vendas') {
+    carregarVendas();
+  } else if (aba === 'despesas') {
+    carregarDespesas();
+  } else if (aba === 'metas') {
+    carregarMetas();
+  }
+}
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => mudarAba(btn.dataset.aba));
+});
+
+// ═══════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════
+if (getToken()) {
+  iniciarApp();
+}
+</script>
+</body>
+</html>
