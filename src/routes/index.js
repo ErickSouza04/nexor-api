@@ -24,6 +24,7 @@ const webhookCtrl = require('../controllers/webhookController')
 
 // ── AUTH (públicas) ──────────────────────────────────────
 router.post('/auth/cadastro',        validarCadastro, authCtrl.cadastrar)
+router.post('/auth/cadastrar',                        authCtrl.cadastrar)
 router.post('/auth/login',           validarLogin,    authCtrl.login)
 router.post('/auth/refresh',                          authCtrl.refreshToken)
 router.post('/auth/logout',          autenticar,      authCtrl.logout)
@@ -42,10 +43,12 @@ router.post('/admin/plano', webhookCtrl.ativarManual)
 const privado = [autenticar, exigirPlanoAtivo]
 
 // Dashboard
-router.get('/dashboard/resumo',     ...privado, dashCtrl.resumoCompleto)
-router.get('/dashboard/indice',     ...privado, dashCtrl.indiceNexor)
-router.get('/dashboard/comparacao', ...privado, dashCtrl.comparacaoMeses)
-router.get('/dashboard/diario',     ...privado, dashCtrl.fluxoDiario)
+router.get('/dashboard/resumo',            ...privado, dashCtrl.resumoCompleto)
+router.get('/dashboard/indice',            ...privado, dashCtrl.indiceNexor)
+router.get('/dashboard/comparacao',        ...privado, dashCtrl.comparacaoMeses)
+router.get('/dashboard/diario',            ...privado, dashCtrl.fluxoDiario)
+router.get('/dashboard/hoje',              ...privado, dashCtrl.resumoHoje)
+router.get('/dashboard/ultimos-registros', ...privado, dashCtrl.ultimosRegistros)
 
 // Vendas
 router.get ('/vendas',              ...privado,               vendasCtrl.listar)
@@ -70,7 +73,8 @@ router.post('/produtos',            ...privado, validarProduto,  metasCtrl.criar
 router.delete('/produtos/:id',      ...privado, validarUUID,    metasCtrl.deletarProduto)
 
 // Perfil
-router.put('/usuarios/perfil', autenticar, validarPerfil, authCtrl.atualizarPerfil)
+router.put('/usuarios/perfil',       autenticar, validarPerfil, authCtrl.atualizarPerfil)
+router.patch('/usuarios/onboarding', autenticar, authCtrl.salvarOnboarding)
 
 // Usuário logado
 router.get('/users/me', autenticar, authCtrl.me)

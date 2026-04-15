@@ -28,7 +28,7 @@ const salvarRefreshToken = async (userId, refreshToken) => {
 // ── CADASTRO ────────────────────────────────────────────
 const cadastrar = async (req, res) => {
   try {
-    const { nome, email, senha, tipo_negocio, faturamento_medio } = req.body
+    const { nome, email, senha, tipo_negocio, faturamento_medio, gastos_estimados, salario_desejado, nexor_score } = req.body
     const emailNorm = email.toLowerCase().trim()
 
     // Verifica se email já existe; remove usuário órfão (sem token) criado por bug anterior
@@ -56,11 +56,24 @@ const cadastrar = async (req, res) => {
 
       // Novo usuário começa com trial de 7 dias
       const novoUsuario = await client.query(
-        `INSERT INTO usuarios (nome, email, senha_hash, tipo_negocio, faturamento_medio, plano, trial_inicio, trial_dias)
-         VALUES ($1, $2, $3, $4, $5, 'trial', NOW(), 7)
+        `INSERT INTO usuarios (
+           nome, email, senha_hash, tipo_negocio,
+           faturamento_medio, gastos_estimados, salario_desejado,
+           nexor_score, plano, trial_inicio, trial_dias
+         )
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'trial',NOW(),7)
          RETURNING id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
                    tipo_negocio, faturamento_medio, criado_em`,
-        [nome.trim(), emailNorm, senhaHash, tipo_negocio || null, faturamento_medio || null]
+        [
+          nome.trim(),
+          emailNorm,
+          senhaHash,
+          tipo_negocio || null,
+          faturamento_medio ? String(faturamento_medio) : null,
+          gastos_estimados  ? parseFloat(gastos_estimados) : 0,
+          salario_desejado  ? parseFloat(salario_desejado) : 0,
+          nexor_score       ? parseInt(nexor_score) : 0
+        ]
       )
 
       const usuario = novoUsuario.rows[0]
@@ -290,7 +303,8 @@ const me = async (req, res) => {
   try {
     const result = await query(
       `SELECT id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
-              tipo_negocio, faturamento_medio, criado_em
+              tipo_negocio, faturamento_medio, criado_em,
+              gastos_estimados, salario_desejado, nexor_score
        FROM usuarios WHERE id = $1`,
       [req.userId]
     )
@@ -314,6 +328,9 @@ const me = async (req, res) => {
         diasRestantes:     status.diasRestantes,
         tipo_negocio:      u.tipo_negocio,
         faturamento_medio: u.faturamento_medio,
+        gastos_estimados:  u.gastos_estimados,
+        salario_desejado:  u.salario_desejado,
+        nexor_score:       u.nexor_score,
         criado_em:         u.criado_em,
       }
     })
@@ -338,4 +355,36 @@ const statusPlano = async (req, res) => {
   }
 }
 
-module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me }
+// ── ONBOARDING ───────────────────────────────────────────
+const salvarOnboarding = async (req, res) => {
+  try {
+    const { faturamento_medio, gastos_estimados, salario_desejado, nexor_score, tipo_negocio } = req.body
+    const userId = req.userId
+
+    await query(
+      `UPDATE usuarios SET
+         faturamento_medio = COALESCE($1, faturamento_medio),
+         gastos_estimados  = COALESCE($2, gastos_estimados),
+         salario_desejado  = COALESCE($3, salario_desejado),
+         nexor_score       = COALESCE($4, nexor_score),
+         tipo_negocio      = COALESCE($5, tipo_negocio),
+         atualizado_em     = NOW()
+       WHERE id = $6`,
+      [
+        faturamento_medio ? String(faturamento_medio) : null,
+        gastos_estimados  ? parseFloat(gastos_estimados) : null,
+        salario_desejado  ? parseFloat(salario_desejado) : null,
+        nexor_score       ? parseInt(nexor_score) : null,
+        tipo_negocio      || null,
+        userId
+      ]
+    )
+
+    res.json({ sucesso: true, mensagem: 'Onboarding salvo!' })
+  } catch (e) {
+    console.error('salvarOnboarding error:', e)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao salvar onboarding' })
+  }
+}
+
+module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me, salvarOnboarding }

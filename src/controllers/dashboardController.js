@@ -1,4 +1,5 @@
 // src/controllers/dashboardController.js
+const { getDataBrasil } = require('../utils/dateUtils')
 // ─────────────────────────────────────────────────────────
 // Controller do Dashboard
 // Calcula Índice Nexor, resumo completo do mês,
@@ -10,8 +11,10 @@ const { queryWithUser } = require('../config/database')
 const resumoCompleto = async (req, res) => {
   try {
     const userId = req.userId
-    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
-    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    // Fallback usa fuso de Brasília para não retornar mês errado em servidores UTC
+    const _hoje = getDataBrasil()
+    const mes = parseInt(req.query.mes) || parseInt(_hoje.slice(5, 7))
+    const ano = parseInt(req.query.ano) || parseInt(_hoje.slice(0, 4))
 
     // Faturamento do mês
     const vendas = await queryWithUser(userId,
@@ -121,8 +124,9 @@ const resumoCompleto = async (req, res) => {
 const indiceNexor = async (req, res) => {
   try {
     const userId = req.userId
-    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
-    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    const _hojei = getDataBrasil()
+    const mes = parseInt(req.query.mes) || parseInt(_hojei.slice(5, 7))
+    const ano = parseInt(req.query.ano) || parseInt(_hojei.slice(0, 4))
 
     // 1. Margem atual (peso: 35 pts)
     const vendas   = await queryWithUser(userId,
@@ -258,42 +262,202 @@ const comparacaoMeses = async (req, res) => {
   }
 }
 
-// ── FLUXO DIÁRIO (últimos 14 dias) ──────────────────────
+// ── RESUMO DE HOJE (hero card — polling leve) ────────────
+// Retorna apenas os dados do dia atual para atualizar o hero card
+// sem precisar recarregar o dashboard inteiro.
+// Filtra pela coluna `data` (DATE em fuso Brasília) — mesmo critério
+// usado pelo agente WhatsApp em resolverData() — garantindo que
+// vendas registradas via WhatsApp apareçam aqui.
+const resumoHoje = async (req, res) => {
+  try {
+    const userId = req.userId
+    const dataHoje = getDataBrasil()
+
+    const [vendasRes, despesasRes, cogsRes, ontemVendasRes, ontemDespesasRes] = await Promise.all([
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS receita, COUNT(*) AS qtd_vendas
+         FROM vendas WHERE user_id = $1 AND data = $2`,
+        [userId, dataHoje]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS despesas
+         FROM despesas WHERE user_id = $1 AND data = $2`,
+        [userId, dataHoje]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(cost_price_snapshot * quantidade), 0) AS cogs
+         FROM vendas WHERE user_id = $1 AND data = $2 AND cost_price_snapshot IS NOT NULL`,
+        [userId, dataHoje]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS receita
+         FROM vendas WHERE user_id = $1 AND data = $2`,
+        [userId, (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()]
+      ),
+      queryWithUser(userId,
+        `SELECT COALESCE(SUM(valor), 0) AS despesas
+         FROM despesas WHERE user_id = $1 AND data = $2`,
+        [userId, (() => { const d = new Date(); d.setDate(d.getDate() - 1); return getDataBrasil(d) })()]
+      ),
+    ])
+
+    const receita      = parseFloat(vendasRes.rows[0].receita)
+    const despesas     = parseFloat(despesasRes.rows[0].despesas)
+    const cogs         = parseFloat(cogsRes.rows[0].cogs)
+    const lucro        = receita - despesas - cogs
+    const margem       = receita > 0 ? (lucro / receita) * 100 : 0
+
+    const receitaOntem = parseFloat(ontemVendasRes.rows[0].receita)
+    const despOntem    = parseFloat(ontemDespesasRes.rows[0].despesas)
+    const lucroOntem   = receitaOntem - despOntem
+    const varLucro     = lucroOntem > 0 ? ((lucro - lucroOntem) / lucroOntem) * 100 : 0
+    const varReceita   = receitaOntem > 0 ? ((receita - receitaOntem) / receitaOntem) * 100 : 0
+
+    const agora = new Date()
+    const horaFormatada = agora.toLocaleTimeString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    res.json({
+      sucesso: true,
+      dados: {
+        data:           dataHoje,
+        receita,
+        total_despesas: despesas,
+        lucro,
+        margem:         parseFloat(margem.toFixed(2)),
+        qtd_vendas:     parseInt(vendasRes.rows[0].qtd_vendas),
+        variacao: {
+          receita: parseFloat(varReceita.toFixed(1)),
+          lucro:   parseFloat(varLucro.toFixed(1)),
+        },
+        atualizado_em: horaFormatada,
+      }
+    })
+
+  } catch (err) {
+    console.error('Erro no resumo de hoje:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao buscar dados de hoje' })
+  }
+}
+
+// ── ÚLTIMOS REGISTROS (vendas + despesas combinados) ────
+// UNION de vendas e despesas ordenado por criado_em DESC.
+// Vendas registradas pelo agente WhatsApp têm criado_em = NOW()
+// e aparecem automaticamente aqui assim que inseridas.
+const ultimosRegistros = async (req, res) => {
+  try {
+    const userId = req.userId
+    const limite = Math.min(parseInt(req.query.limite) || 5, 20)
+
+    const resultado = await queryWithUser(userId,
+      `SELECT tipo, valor, descricao, categoria, criado_em
+       FROM (
+         SELECT 'venda'   AS tipo,
+                valor,
+                COALESCE(produto, categoria, 'Venda') AS descricao,
+                categoria,
+                criado_em
+         FROM vendas WHERE user_id = $1
+         UNION ALL
+         SELECT 'despesa' AS tipo,
+                valor,
+                COALESCE(descricao, categoria, 'Despesa') AS descricao,
+                categoria,
+                criado_em
+         FROM despesas WHERE user_id = $1
+       ) registros
+       ORDER BY criado_em DESC
+       LIMIT $2`,
+      [userId, limite]
+    )
+
+    res.json({
+      sucesso: true,
+      dados: resultado.rows.map(r => ({
+        tipo:      r.tipo,
+        valor:     parseFloat(r.valor),
+        descricao: r.descricao,
+        categoria: r.categoria,
+        criado_em: r.criado_em,
+      }))
+    })
+
+  } catch (err) {
+    console.error('Erro nos últimos registros:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro ao buscar últimos registros' })
+  }
+}
+
+// ── FLUXO DIÁRIO (últimos 30 dias) ──────────────────────
+// Agrupa pela coluna `data` (DATE já em fuso Brasília, setada via
+// getDataBrasil() em todos os inserts) para refletir a data real
+// da transação, não o momento de cadastro.
 const fluxoDiario = async (req, res) => {
   try {
     const userId = req.userId
+    const hoje = getDataBrasil()  // 'YYYY-MM-DD' em horário de Brasília
+    console.log('[fluxoDiario] userId:', userId)
 
     const vendDiario = await queryWithUser(userId,
-      `SELECT data, SUM(valor) AS total
-       FROM vendas WHERE user_id = $1 AND data >= NOW() - INTERVAL '14 days'
-       GROUP BY data ORDER BY data`,
+      `SELECT data, SUM(valor) AS total, SUM(COALESCE(cost_price_snapshot * quantidade, 0)) AS total_cogs
+       FROM vendas
+       WHERE user_id = $1
+         AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
+       GROUP BY data
+       ORDER BY data`,
       [userId]
     )
+    console.log('[fluxoDiario] vendas encontradas:', vendDiario.rows.length)
 
     const despDiario = await queryWithUser(userId,
       `SELECT data, SUM(valor) AS total
-       FROM despesas WHERE user_id = $1 AND data >= NOW() - INTERVAL '14 days'
-       GROUP BY data ORDER BY data`,
+       FROM despesas
+       WHERE user_id = $1
+         AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
+       GROUP BY data
+       ORDER BY data`,
       [userId]
     )
 
-    // Gera todos os dias do período
+    // Gera todos os 30 dias do período em fuso de Brasília.
+    // Parte da data BRT (hoje) convertida para UTC puro, subtraindo dias
+    // via setUTCDate para evitar drift de timezone.
+    // pg retorna DATE como string 'YYYY-MM-DD' — comparamos diretamente.
+    console.log('[fluxoDiario] primeiro r.data:', vendDiario.rows[0]?.data, typeof vendDiario.rows[0]?.data)
     const dias = []
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i)
+    const [anoH, mesH, diaH] = hoje.split('-').map(Number)
+    const baseDate = new Date(Date.UTC(anoH, mesH - 1, diaH))
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(baseDate)
+      d.setUTCDate(d.getUTCDate() - i)
       const dataStr = d.toISOString().split('T')[0]
-      const venda = vendDiario.rows.find(r => r.data.toISOString().split('T')[0] === dataStr)
-      const desp  = despDiario.rows.find(r => r.data.toISOString().split('T')[0] === dataStr)
-      const fat   = venda ? parseFloat(venda.total) : 0
-      const despTotal = desp ? parseFloat(desp.total) : 0
+      const venda = vendDiario.rows.find(r => {
+        const d = r.data instanceof Date
+          ? r.data.toISOString().slice(0, 10)
+          : String(r.data).slice(0, 10)
+        return d === dataStr
+      })
+      const desp = despDiario.rows.find(r => {
+        const d = r.data instanceof Date
+          ? r.data.toISOString().slice(0, 10)
+          : String(r.data).slice(0, 10)
+        return d === dataStr
+      })
+      const fat       = venda ? parseFloat(venda.total)      : 0
+      const cogs      = venda ? parseFloat(venda.total_cogs) : 0
+      const despTotal = desp  ? parseFloat(desp.total)       : 0
       dias.push({
         data:        dataStr,
         faturamento: fat,
         despesas:    despTotal,
-        lucro:       fat - despTotal
+        lucro:       fat - cogs - despTotal
       })
     }
 
+    console.log('[fluxoDiario] amostra dias:', JSON.stringify(dias.filter(d => d.faturamento > 0)))
     res.json({ sucesso: true, dados: dias })
 
   } catch (err) {
@@ -302,4 +466,4 @@ const fluxoDiario = async (req, res) => {
   }
 }
 
-module.exports = { resumoCompleto, indiceNexor, comparacaoMeses, fluxoDiario }
+module.exports = { resumoCompleto, indiceNexor, comparacaoMeses, fluxoDiario, resumoHoje, ultimosRegistros }
