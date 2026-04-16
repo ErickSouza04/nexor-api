@@ -72,6 +72,11 @@ router.get ('/produtos',            ...privado,                 metasCtrl.listar
 router.post('/produtos',            ...privado, validarProduto,  metasCtrl.criarProduto)
 router.delete('/produtos/:id',      ...privado, validarUUID,    metasCtrl.deletarProduto)
 
+// Precificação de Produtos (alias semântico das rotas acima)
+router.get ('/precificacao/produtos',        ...privado,                metasCtrl.listarProdutos)
+router.post('/precificacao/produtos',        ...privado, validarProduto, metasCtrl.criarProduto)
+router.delete('/precificacao/produtos/:id',  ...privado, validarUUID,   metasCtrl.deletarProduto)
+
 // Perfil
 router.put('/usuarios/perfil',       autenticar, validarPerfil, authCtrl.atualizarPerfil)
 router.patch('/usuarios/onboarding', autenticar, authCtrl.salvarOnboarding)

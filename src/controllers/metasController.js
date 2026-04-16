@@ -67,6 +67,7 @@ const criarProduto = async (req, res) => {
   try {
     const userId = req.userId
     const { nome, custo, embalagem, taxa_percentual, margem_desejada } = req.body
+    console.log('[Precificacao] POST recebido:', { userId, body: req.body })
 
     const custoTotal  = parseFloat(custo) + parseFloat(embalagem || 0)
     const taxa        = parseFloat(taxa_percentual || 0) / 100
