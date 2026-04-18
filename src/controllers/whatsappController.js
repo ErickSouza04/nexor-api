@@ -333,8 +333,12 @@ async function handleVenda(userId, parsed, userContext) {
   }
 
   // Sem produto identificado — fluxo original (venda por valor avulso)
-  if (!parsed.valor) {
-    return '❓ Qual foi o valor da venda? Tente: *Vendi 3 bolos por R$ 30*'
+  if (!parsed.valor || parsed.valor <= 0) {
+    return 'Não consegui identificar o valor da venda.\nTente: \'vendi 1 camiseta por R$ 50\''
+  }
+
+  if (parsed.valor > 50000) {
+    return `O valor ${fmt(parsed.valor)} parece muito alto. Confirma?\nSe sim, cadastre o produto primeiro para registrar.`
   }
 
   const descricaoVenda = parsed.descricao || parsed.produto || null
