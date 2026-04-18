@@ -692,16 +692,19 @@ async function handleConsultaLucro(userId, periodo, userContext) {
     ),
   ])
 
-  const receita = parseFloat(vendas.rows[0].total)
-  const custos  = parseFloat(despesas.rows[0].total)
-  const lucro   = receita - custos
-  const margem  = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
+  const receita    = parseFloat(vendas.rows[0].total)
+  const custos     = parseFloat(despesas.rows[0].total)
+  const lucro      = receita - custos
+  const proLabore  = userContext?.proLabore && userContext.proLabore > 0 ? userContext.proLabore : 0
+  const lucroFinal = proLabore > 0 ? lucro - proLabore : lucro
+  const labelLucro = proLabore > 0 ? 'Lucro líquido' : 'Lucro'
+  const margem     = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
 
   // Compara com período anterior para detectar crescimento
   let lucroCrescendo = false
   if (periodo === 'hoje' || !periodo) {
     const lucroOntem = await buscarLucroOntem(userId)
-    lucroCrescendo = lucro > lucroOntem
+    lucroCrescendo = lucroFinal > lucroOntem
   }
 
   // Percentual da meta mensal já atingida (usa dados mensais do contexto)
@@ -719,7 +722,7 @@ async function handleConsultaLucro(userId, periodo, userContext) {
     `💰 ${label}`,
     `Receita: ${fmt(receita)}`,
     `Despesas: ${fmt(custos)}`,
-    `Lucro: ${fmt(lucro)} (margem ${margem}%)`,
+    `${labelLucro}: ${fmt(lucroFinal)} (margem ${margem}%)`,
     '',
     frase,
   ].join('\n')
@@ -888,7 +891,8 @@ const handleWebhook = async (req, res) => {
       const despesas       = parseFloat(despesasMesRes.rows[0].total)
       const lucro          = receita - despesas
       const margem         = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
-      const lucroProjetado = diaAtual > 0 ? (lucro / diaAtual) * diasNoMes : 0
+      const lucroLiquido   = proLabore && proLabore > 0 ? lucro - proLabore : lucro
+      const lucroProjetado = diaAtual > 0 ? (lucroLiquido / diaAtual) * diasNoMes : 0
 
       userContext = {
         nome: user.nome,
