@@ -732,14 +732,6 @@ const handleWebhook = async (req, res) => {
   try {
     const body = req.body || {}
 
-    // [DEBUG TEMPORÁRIO] — remover após confirmar header correto
-    console.log('[DEBUG-HEADERS]', JSON.stringify({
-      'z-api-token': req.headers['z-api-token'],
-      'x-zapi-token': req.headers['x-zapi-token'],
-      'authorization': req.headers['authorization'],
-      'all-keys': Object.keys(req.headers)
-    }))
-
     // Validação do token Z-API
     const zapiToken = req.headers['z-api-token']
     const expectedToken = process.env.ZAPI_TOKEN
@@ -752,9 +744,6 @@ const handleWebhook = async (req, res) => {
 
     res.sendStatus(200)
 
-    console.log('================ WEBHOOK RECEBIDO ================')
-    console.log('[WHATSAPP] payload completo:', JSON.stringify(body, null, 2))
-
     // ── Extração dos campos — suporta Z-API real + Hoppscotch ──
     const phone     = body.phone || body.connectedPhone || ''
     const text      = body?.text?.message || body?.message?.text || body?.message || ''
@@ -764,13 +753,6 @@ const handleWebhook = async (req, res) => {
     const isAudio   = !!body?.audio?.audioUrl
     const audioUrl  = body?.audio?.audioUrl || null
     const mimeType  = body?.audio?.mimeType || 'audio/ogg'
-
-    console.log('[WHATSAPP] phone extraído:', phone)
-    console.log('[WHATSAPP] text extraído:', text)
-    console.log('[WHATSAPP] messageId:', messageId)
-    console.log('[WHATSAPP] type:', type)
-    console.log('[WHATSAPP] fromMe:', fromMe)
-    console.log('[WHATSAPP] isAudio:', isAudio, '| audioUrl:', audioUrl)
 
     // ── Ignora mensagens enviadas pelo próprio bot ──────────
     if (fromMe) {
@@ -1018,10 +1000,6 @@ const handleWebhook = async (req, res) => {
         resposta = '❌ Ocorreu um erro ao processar. Tente novamente ou acesse o app Nexor.'
       }
     }
-
-    console.log('[DEBUG-FLOW] chegou após handler, resposta:', resposta?.slice(0,50))
-    console.log('[DEBUG-FLOW] phoneNorm:', phoneNorm)
-    console.log('[DEBUG-FLOW] messageId:', messageId)
 
     // ── Salva mensagem do usuário + resposta no histórico ───
     try {
