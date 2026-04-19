@@ -358,8 +358,42 @@ const statusPlano = async (req, res) => {
 // ── ONBOARDING ───────────────────────────────────────────
 const salvarOnboarding = async (req, res) => {
   try {
-    const { faturamento_medio, gastos_estimados, salario_desejado, nexor_score, tipo_negocio } = req.body
+    let { faturamento_medio, gastos_estimados, salario_desejado, nexor_score, tipo_negocio } = req.body
     const userId = req.userId
+
+    const temFaturamento = faturamento_medio !== undefined
+    const temGastos      = gastos_estimados  !== undefined
+    const temSalario     = salario_desejado  !== undefined
+    const temScore       = nexor_score       !== undefined
+
+    if (temFaturamento) faturamento_medio = parseFloat(faturamento_medio)
+    if (temGastos)      gastos_estimados  = parseFloat(gastos_estimados)
+    if (temSalario)     salario_desejado  = parseFloat(salario_desejado)
+    if (temScore)       nexor_score       = parseFloat(nexor_score)
+
+    if (
+      (temFaturamento && faturamento_medio < 0) ||
+      (temGastos      && gastos_estimados  < 0) ||
+      (temSalario     && salario_desejado  < 0)
+    ) {
+      return res.status(400).json({ sucesso: false, erro: 'Valores não podem ser negativos' })
+    }
+
+    if (temFaturamento && temGastos && gastos_estimados > faturamento_medio) {
+      return res.status(400).json({ sucesso: false, erro: 'Gastos não podem ser maiores que o faturamento' })
+    }
+
+    let aviso
+    if (temSalario && temFaturamento && temGastos) {
+      const lucro = faturamento_medio - gastos_estimados
+      if (salario_desejado > lucro) {
+        aviso = 'Pró-labore maior que o lucro estimado'
+      }
+    }
+
+    if (temScore) {
+      nexor_score = Math.min(100, Math.max(0, nexor_score))
+    }
 
     await query(
       `UPDATE usuarios SET
@@ -371,16 +405,18 @@ const salvarOnboarding = async (req, res) => {
          atualizado_em     = NOW()
        WHERE id = $6`,
       [
-        faturamento_medio ? String(faturamento_medio) : null,
-        gastos_estimados  ? parseFloat(gastos_estimados) : null,
-        salario_desejado  ? parseFloat(salario_desejado) : null,
-        nexor_score       ? parseInt(nexor_score) : null,
-        tipo_negocio      || null,
+        temFaturamento ? faturamento_medio : null,
+        temGastos      ? gastos_estimados  : null,
+        temSalario     ? salario_desejado  : null,
+        temScore       ? nexor_score       : null,
+        tipo_negocio   || null,
         userId
       ]
     )
 
-    res.json({ sucesso: true, mensagem: 'Onboarding salvo!' })
+    const resposta = { sucesso: true, mensagem: 'Onboarding salvo!' }
+    if (aviso) resposta.aviso = aviso
+    res.json(resposta)
   } catch (e) {
     console.error('salvarOnboarding error:', e)
     res.status(500).json({ sucesso: false, erro: 'Erro ao salvar onboarding' })
