@@ -1080,11 +1080,28 @@ const registerPhone = async (req, res) => {
       userId,
       `INSERT INTO user_phones (user_id, phone)
        VALUES ($1, $2)
-       ON CONFLICT (phone) 
+       ON CONFLICT (phone)
        DO UPDATE SET user_id = EXCLUDED.user_id
        RETURNING *`,
       [userId, finalPhone]
     )
+
+    try {
+      const usuarioResult = await query('SELECT nome FROM usuarios WHERE id = $1', [userId])
+      const primeiroNome = usuarioResult.rows[0]?.nome?.split(' ')[0] || 'usuário'
+      const mensagemBoasVindas =
+        `Olá, ${primeiroNome}! 👋\n` +
+        `Sou o Nexor AI, seu assistente financeiro no WhatsApp.\n` +
+        `Você pode me mandar mensagens como:\n` +
+        `• "Vendi 2 camisetas por R$ 80"\n` +
+        `• "Qual meu lucro esse mês?"\n` +
+        `• "Registra uma despesa de R$ 150"\n` +
+        `• "Como tá meu estoque?"\n` +
+        `Qualquer dúvida é só chamar. Vamos nessa! 🚀`
+      await sendMessage(finalPhone, mensagemBoasVindas)
+    } catch (errMsg) {
+      console.error('[registerPhone] Falha ao enviar mensagem de boas-vindas:', errMsg)
+    }
 
     return res.status(201).json({
       sucesso: true,
