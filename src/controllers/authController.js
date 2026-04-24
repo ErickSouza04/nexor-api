@@ -54,15 +54,15 @@ const cadastrar = async (req, res) => {
     try {
       await client.query('BEGIN')
 
-      // Novo usuário começa com trial de 7 dias
+      // Novo usuário já cadastra com plano plus ativo
       const novoUsuario = await client.query(
         `INSERT INTO usuarios (
            nome, email, senha_hash, tipo_negocio,
            faturamento_medio, gastos_estimados, salario_desejado,
-           nexor_score, plano, trial_inicio, trial_dias
+           nexor_score, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias
          )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'trial',NOW(),7)
-         RETURNING id, nome, email, plan, plano, tipo_plano, trial_inicio, trial_dias,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'plus','plus','plus',true,NOW(),30)
+         RETURNING id, nome, email, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias,
                    tipo_negocio, faturamento_medio, criado_em`,
         [
           nome.trim(),
