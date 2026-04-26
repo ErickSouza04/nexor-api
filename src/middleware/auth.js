@@ -64,6 +64,34 @@ const calcularStatusPlano = (usuario) => {
     }
   }
 
+  if (usuario.plan === 'plus') {
+    const preco = PRECOS_PLAN['plus']
+    return {
+      plano:         'plus',
+      tipo_plano:    'plus',
+      plan:          'plus',
+      rotulo:        ROTULOS_PLAN['plus'] || 'Plano Plus',
+      preco:         preco?.valor || null,
+      periodo:       preco?.periodo || null,
+      diasRestantes: null,
+      expirado:      false,
+    }
+  }
+
+  if (usuario.plan === 'base') {
+    const preco = PRECOS_PLAN['base']
+    return {
+      plano:         'base',
+      tipo_plano:    'base',
+      plan:          'base',
+      rotulo:        ROTULOS_PLAN['base'] || 'Plano Base',
+      preco:         preco?.valor || null,
+      periodo:       preco?.periodo || null,
+      diasRestantes: null,
+      expirado:      false,
+    }
+  }
+
   // trial ou expirado — recalcula sempre
   const inicio = new Date(usuario.trial_inicio)
   const agora = new Date()
