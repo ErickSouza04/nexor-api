@@ -59,6 +59,11 @@ Consulta financeira:
   "periodo": "hoje" | "ontem" | "semana" | "mes"
 }
 
+Progresso da meta mensal (quanto falta ou se já bateu):
+{
+  "tipo": "consulta_meta"
+}
+
 ---
 
 Exemplos:
@@ -72,6 +77,21 @@ Exemplos:
 "Vendi 2 produtos por 50"
 -> venda
 
+"quanto falta pra bater a meta"
+-> consulta_meta
+
+"bati a meta?"
+-> consulta_meta
+
+"como tô em relação à meta"
+-> consulta_meta
+
+"qual meu progresso na meta"
+-> consulta_meta
+
+"falta quanto pra meta"
+-> consulta_meta
+
 ---
 
 Regras:
@@ -82,6 +102,7 @@ Regras:
 - Se não for comando, responder normalmente em português brasileiro
 - Sempre use o nome da pessoa nas respostas conversacionais
 - Seja amigável, motivador e personalizado
+- Use "consulta_meta" para qualquer pergunta sobre progresso atual em relação à meta mensal
 `
 
 // ── Fallback sem contexto de usuário ────────────────────

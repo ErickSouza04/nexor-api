@@ -571,7 +571,18 @@ async function handleConsultaEstoque(userId, parsed) {
 // ANÁLISE PREDITIVA E DE METAS
 // ─────────────────────────────────────────────────────────
 
-// Palavras-chave que ativam a análise de metas
+// Palavras-chave que ativam a consulta direta de progresso da meta
+const META_PROGRESS_KEYWORDS = [
+  'quanto falta pra meta', 'quanto falta para a meta',
+  'quanto falta pra bater', 'quanto falta para bater',
+  'falta quanto pra meta', 'falta quanto para a meta',
+  'bati a meta', 'bati minha meta', 'bateu a meta',
+  'como tô em relação', 'como to em relacao',
+  'como estou em relação', 'como estou na meta',
+  'progresso na meta', 'qual meu progresso na meta',
+]
+
+// Palavras-chave que ativam a análise preditiva de metas
 const GOAL_KEYWORDS = [
   'meta', 'chegar em', 'possível fechar', 'possivel fechar',
   'projeção', 'projecao', 'quanto vou lucrar', 'quanto vou faturar',
@@ -579,7 +590,15 @@ const GOAL_KEYWORDS = [
 ]
 
 /**
- * Retorna true se a mensagem contém palavras-chave de análise de metas.
+ * Retorna true se a mensagem é sobre progresso/status atual da meta.
+ */
+function detectaProgressoMeta(text) {
+  const lower = text.toLowerCase()
+  return META_PROGRESS_KEYWORDS.some(kw => lower.includes(kw))
+}
+
+/**
+ * Retorna true se a mensagem contém palavras-chave de análise preditiva de metas.
  */
 function detectaAnaliseMetaFinanceira(text) {
   const lower = text.toLowerCase()
@@ -608,6 +627,41 @@ function extrairMetaValor(text) {
   if (numMatch) return parseFloat(numMatch[1])
 
   return null
+}
+
+/**
+ * Responde objetivamente quanto falta (ou quanto foi superado) em relação à meta mensal.
+ * Usa os dados já carregados no userContext para evitar queries extras.
+ */
+async function handleProgressoMeta(userId, userContext) {
+  const metaValor  = userContext?.metaValor
+  const lucroAtual = userContext?.lucro ?? 0
+
+  if (!metaValor || metaValor <= 0) {
+    return (
+      `🎯 Você ainda não tem uma meta mensal cadastrada.\n\n` +
+      `Acesse o app Nexor e defina sua meta para acompanhar o progresso por aqui! 💪`
+    )
+  }
+
+  const faltam = metaValor - lucroAtual
+
+  if (faltam <= 0) {
+    const excedente = Math.abs(faltam)
+    return (
+      `🏆 *Meta batida!* Você superou em *${fmt(excedente)}*\n\n` +
+      `✅ Meta: ${fmt(metaValor)}\n` +
+      `💰 Lucro atual: ${fmt(lucroAtual)}\n\n` +
+      `Continue assim! 🔥`
+    )
+  }
+
+  return (
+    `✅ Meta: ${fmt(metaValor)}\n` +
+    `💰 Lucro atual: ${fmt(lucroAtual)}\n` +
+    `🎯 Faltam: *${fmt(faltam)}* para bater a meta!\n\n` +
+    `Você consegue! 💪`
+  )
 }
 
 /**
@@ -971,8 +1025,17 @@ const handleWebhook = async (req, res) => {
 
     let resposta
 
-    // ── Detecção de análise de metas ────────────────────────
-    if (detectaAnaliseMetaFinanceira(messageText)) {
+    // ── Detecção de progresso direto da meta ("quanto falta pra meta") ──
+    if (detectaProgressoMeta(messageText)) {
+      console.log('[WHATSAPP] Detectado pedido de progresso da meta')
+      try {
+        resposta = await handleProgressoMeta(userId, userContext)
+      } catch (err) {
+        console.error('[WHATSAPP] Erro no progresso de meta:', err.message)
+        resposta = '❌ Não consegui calcular o progresso agora. Tente novamente.'
+      }
+    // ── Detecção de análise preditiva de metas ("vou bater a meta?", "projeção") ──
+    } else if (detectaAnaliseMetaFinanceira(messageText)) {
       console.log('[WHATSAPP] Detectado pedido de análise de meta financeira')
       try {
         resposta = await handleAnaliseMetaFinanceira(userId, messageText, userContext?.metaValor)
@@ -1018,6 +1081,10 @@ const handleWebhook = async (req, res) => {
 
           case 'estoque_saida':
             resposta = await handleEstoqueSaida(userId, parsed)
+            break
+
+          case 'consulta_meta':
+            resposta = await handleProgressoMeta(userId, userContext)
             break
 
           case 'consulta_financeira':
