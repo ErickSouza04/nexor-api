@@ -66,6 +66,13 @@ const calcularStatusPlano = (usuario) => {
 
   if (usuario.plan === 'plus') {
     const preco = PRECOS_PLAN['plus']
+    let diasRestantes = null
+    if (usuario.trial_inicio && usuario.trial_dias) {
+      const inicio = new Date(usuario.trial_inicio)
+      const agora = new Date()
+      const diasPassados = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24))
+      diasRestantes = Math.max(0, usuario.trial_dias - diasPassados)
+    }
     return {
       plano:         'plus',
       tipo_plano:    'plus',
@@ -73,7 +80,7 @@ const calcularStatusPlano = (usuario) => {
       rotulo:        ROTULOS_PLAN['plus'] || 'Plano Plus',
       preco:         preco?.valor || null,
       periodo:       preco?.periodo || null,
-      diasRestantes: null,
+      diasRestantes,
       expirado:      false,
     }
   }
