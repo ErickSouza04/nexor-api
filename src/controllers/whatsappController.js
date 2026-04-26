@@ -76,44 +76,56 @@ function resolverData(data) {
 }
 
 // ── Converte periodo para { inicio, fim, label } ─────────
+// Usa fuso de Brasília para que a janela de datas bata com os
+// registros salvos via getDataBrasil() — evita drift UTC vs BRT.
+// inicio/fim são strings 'YYYY-MM-DD' para comparação direta com
+// a coluna DATE do banco (sem ambiguidade de TIMESTAMPTZ).
 function resolverPeriodo(periodo) {
-  const hoje = new Date()
-  const ano  = hoje.getFullYear()
-  const mes  = hoje.getMonth()
-  const dia  = hoje.getDate()
+  const hoje  = getDataBrasil()          // 'YYYY-MM-DD' no fuso de Brasília
+  const [anoS, mesS, diaS] = hoje.split('-')
+  const anoN  = parseInt(anoS)
+  const mesN  = parseInt(mesS)           // 1-based (1–12)
+  const diaN  = parseInt(diaS)
+
+  // Último dia do mês (mesN 1-based): usa meio-dia UTC do 1º do mês seguinte
+  // para evitar que new Date() ao meio-dia UTC vire dia anterior em BRT (UTC-3).
+  function fimDeMes(a, m) {
+    const noonNextMonth = new Date(Date.UTC(a, m, 1, 12)) // m já é índice 0-based do próximo mês
+    return getDataBrasil(new Date(noonNextMonth.getTime() - 24 * 60 * 60 * 1000))
+  }
 
   switch (periodo) {
     case 'hoje':
-      return {
-        inicio: new Date(ano, mes, dia, 0, 0, 0),
-        fim:    new Date(ano, mes, dia, 23, 59, 59),
-        label:  'hoje'
-      }
-    case 'ontem':
-      return {
-        inicio: new Date(ano, mes, dia - 1, 0, 0, 0),
-        fim:    new Date(ano, mes, dia - 1, 23, 59, 59),
-        label:  'ontem'
-      }
+      return { inicio: hoje, fim: hoje, label: 'hoje' }
+
+    case 'ontem': {
+      const ontem = getDataOntemBrasil()
+      return { inicio: ontem, fim: ontem, label: 'ontem' }
+    }
+
     case 'semana':
     case 'essa_semana':
     case 'esta_semana': {
-      const inicioSemana = new Date(ano, mes, dia - hoje.getDay())
-      inicioSemana.setHours(0, 0, 0, 0)
-      return { inicio: inicioSemana, fim: hoje, label: 'semana atual' }
+      // Usa UTC noon do dia BRT para que getUTCDay() retorne o dia correto
+      const noonUTC   = new Date(Date.UTC(anoN, mesN - 1, diaN, 12))
+      const diaSemana = noonUTC.getUTCDay()   // 0 = Dom … 6 = Sáb
+      const inicioUTC = new Date(Date.UTC(anoN, mesN - 1, diaN - diaSemana, 12))
+      return { inicio: getDataBrasil(inicioUTC), fim: hoje, label: 'semana atual' }
     }
-    case 'mes_passado':
-      return {
-        inicio: new Date(ano, mes - 1, 1),
-        fim:    new Date(ano, mes, 0, 23, 59, 59),
-        label:  'mês passado'
-      }
-    default: // 'mes', 'este_mes', qualquer outro
-      return {
-        inicio: new Date(ano, mes, 1),
-        fim:    new Date(ano, mes + 1, 0, 23, 59, 59),
-        label:  new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
-      }
+
+    case 'mes_passado': {
+      const mesPrev  = mesN === 1 ? 12 : mesN - 1
+      const anoPrev  = mesN === 1 ? anoN - 1 : anoN
+      const inicio   = `${String(anoPrev).padStart(4, '0')}-${String(mesPrev).padStart(2, '0')}-01`
+      return { inicio, fim: fimDeMes(anoPrev, mesPrev), label: 'mês passado' }
+    }
+
+    default: { // 'mes', 'este_mes', qualquer outro
+      const label = new Date().toLocaleString('pt-BR', {
+        month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo',
+      })
+      return { inicio: `${anoS}-${mesS}-01`, fim: fimDeMes(anoN, mesN), label }
+    }
   }
 }
 
@@ -603,15 +615,18 @@ function extrairMetaValor(text) {
  * storedMetaValor: meta cadastrada no perfil do usuário (fallback se não mencionar valor na mensagem)
  */
 async function handleAnaliseMetaFinanceira(userId, messageText, storedMetaValor = null) {
-  const hoje        = new Date()
-  const ano         = hoje.getFullYear()
-  const mes         = hoje.getMonth()
-  const diaAtual    = hoje.getDate()
-  const diasNoMes   = new Date(ano, mes + 1, 0).getDate()
-  const diasRestantes = diasNoMes - diaAtual
+  const hojeStr     = getDataBrasil()   // 'YYYY-MM-DD' no fuso de Brasília
+  const [anoS, mesS, diaS] = hojeStr.split('-')
+  const ano         = parseInt(anoS)
+  const mesN        = parseInt(mesS)    // 1-based
+  const diaAtual    = parseInt(diaS)
 
-  const inicioMes = new Date(ano, mes, 1)
-  const fimMes    = new Date(ano, mes + 1, 0, 23, 59, 59)
+  const inicioMes   = `${anoS}-${mesS}-01`
+  // Último dia do mês via meio-dia UTC para evitar drift BRT/UTC
+  const _noonNext   = new Date(Date.UTC(ano, mesN, 1, 12))
+  const fimMes      = getDataBrasil(new Date(_noonNext.getTime() - 24 * 60 * 60 * 1000))
+  const diasNoMes   = parseInt(fimMes.split('-')[2])
+  const diasRestantes = diasNoMes - diaAtual
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,
@@ -634,7 +649,7 @@ async function handleAnaliseMetaFinanceira(userId, messageText, storedMetaValor 
   const lucroProjetado   = diaAtual > 0 ? (lucroAtual / diaAtual) * diasNoMes : 0
   const receitaProjetada = diaAtual > 0 ? (receita / diaAtual) * diasNoMes : 0
 
-  const nomeMes   = hoje.toLocaleString('pt-BR', { month: 'long' })
+  const nomeMes   = new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })
   // Prioridade: valor mencionado na mensagem > meta cadastrada no perfil
   const metaValor = extrairMetaValor(messageText) || storedMetaValor
 
@@ -852,15 +867,18 @@ const handleWebhook = async (req, res) => {
     // ── Carrega contexto do usuário: perfil + financeiro do mês ──
     let userContext = null
     try {
-      const hoje        = new Date()
-      const anoAtual    = hoje.getFullYear()
-      const mesAtual    = hoje.getMonth()         // 0-based
-      const mesNum      = mesAtual + 1            // 1-based para a tabela metas
-      const diaAtual    = hoje.getDate()
-      const diasNoMes   = new Date(anoAtual, mesAtual + 1, 0).getDate()
-      const inicioMes   = new Date(anoAtual, mesAtual, 1)
-      const fimMes      = new Date(anoAtual, mesAtual + 1, 0, 23, 59, 59)
-      const nomeMes     = hoje.toLocaleString('pt-BR', { month: 'long' })
+      const hojeStr     = getDataBrasil()     // 'YYYY-MM-DD' no fuso de Brasília
+      const [_anoS, _mesS, _diaS] = hojeStr.split('-')
+      const anoAtual    = parseInt(_anoS)
+      const mesNum      = parseInt(_mesS)     // 1-based para a tabela metas
+      const diaAtual    = parseInt(_diaS)
+
+      const inicioMes   = `${_anoS}-${_mesS}-01`
+      // Último dia do mês via meio-dia UTC para evitar drift BRT/UTC
+      const _noonCtx    = new Date(Date.UTC(anoAtual, mesNum, 1, 12))
+      const fimMes      = getDataBrasil(new Date(_noonCtx.getTime() - 24 * 60 * 60 * 1000))
+      const diasNoMes   = parseInt(fimMes.split('-')[2])
+      const nomeMes     = new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })
 
       const [metaRes, vendasMesRes, despesasMesRes] = await Promise.all([
         queryWithUser(userId,
