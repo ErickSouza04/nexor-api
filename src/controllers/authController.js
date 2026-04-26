@@ -61,7 +61,7 @@ const cadastrar = async (req, res) => {
            faturamento_medio, gastos_estimados, salario_desejado,
            nexor_score, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias
          )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'plus','plus','plus',true,NOW(),30)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'plus','ativo','mensal',true,NOW(),30)
          RETURNING id, nome, email, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias,
                    tipo_negocio, faturamento_medio, criado_em`,
         [
@@ -94,7 +94,7 @@ const cadastrar = async (req, res) => {
 
       res.status(201).json({
         sucesso: true,
-        mensagem: 'Conta criada com sucesso! Você tem 7 dias grátis.',
+        mensagem: 'Conta criada com sucesso! Bem-vindo ao Plano Plus!',
         token: accessToken,
         refresh_token: refreshTokenValue,
         usuario: {
