@@ -97,8 +97,9 @@ const deletar = async (req, res) => {
 const resumoMes = async (req, res) => {
   try {
     const userId = req.userId
-    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
-    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    const _hoje = getDataBrasil()
+    const mes = parseInt(req.query.mes) || parseInt(_hoje.slice(5, 7))
+    const ano = parseInt(req.query.ano) || parseInt(_hoje.slice(0, 4))
 
     // Total geral
     const total = await queryWithUser(userId,

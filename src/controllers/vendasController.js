@@ -5,7 +5,7 @@
 // NUNCA aceita user_id do body ou query params
 // ─────────────────────────────────────────────────────────
 const { queryWithUser, transaction } = require('../config/database')
-const { getDataBrasil } = require('../utils/dateUtils')
+const { getDataBrasil, getDataOntemBrasil } = require('../utils/dateUtils')
 
 // ── LISTAR vendas (com filtro de mês/ano) ───────────────
 const listar = async (req, res) => {
@@ -137,7 +137,7 @@ const deletar = async (req, res) => {
 const resumoDia = async (req, res) => {
   try {
     const userId = req.userId
-    const hoje = req.query.data || new Date().toISOString().split('T')[0]
+    const hoje = req.query.data || getDataBrasil()
 
     const resultado = await queryWithUser(userId,
       `SELECT
@@ -169,8 +169,9 @@ const resumoDia = async (req, res) => {
 const resumoMes = async (req, res) => {
   try {
     const userId = req.userId
-    const mes = parseInt(req.query.mes) || new Date().getMonth() + 1
-    const ano = parseInt(req.query.ano) || new Date().getFullYear()
+    const _hoje = getDataBrasil()
+    const mes = parseInt(req.query.mes) || parseInt(_hoje.slice(5, 7))
+    const ano = parseInt(req.query.ano) || parseInt(_hoje.slice(0, 4))
 
     const resultado = await queryWithUser(userId,
       `SELECT
