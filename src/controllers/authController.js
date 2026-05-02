@@ -101,6 +101,7 @@ const cadastrar = async (req, res) => {
           id:               usuario.id,
           nome:             usuario.nome,
           email:            usuario.email,
+          plan:             statusPlano.plan || usuario.plan || 'base',
           plano:            statusPlano.plano,
           tipo_plano:       statusPlano.tipo_plano,
           rotulo:           statusPlano.rotulo,
