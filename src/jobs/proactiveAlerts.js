@@ -13,6 +13,7 @@
 const cron          = require('node-cron')
 const { query, queryWithUser } = require('../config/database')
 const { sendMessage }          = require('../services/whatsappSender')
+const { getDataBrasil }        = require('../utils/dateUtils')
 
 // ── Busca todos os usuários Plus ativos com telefone ──────
 async function getPlusUsersWithPhones() {
@@ -40,15 +41,19 @@ function fmtBRL(valor) {
 // MELHORIA 1 — ALERTAS INTELIGENTES
 // ════════════════════════════════════════════════════════════
 
-// Retorna a contagem de registros (vendas + despesas) nas últimas 48h
+// Retorna a contagem de registros (vendas + despesas) de hoje no fuso de Brasília.
+// Usa a coluna DATE `data` — mesmo critério de resolverData() — para evitar
+// drift UTC vs BRT: uma venda registrada às 23h BRT tem data = hoje em BRT,
+// mas criado_em UTC pode cair no dia seguinte.
 async function contarAtividadeRecente(userId) {
+  const hoje = getDataBrasil()
   try {
     const res = await queryWithUser(userId, `
       SELECT (
-        (SELECT COUNT(*) FROM vendas   WHERE user_id = $1 AND criado_em >= NOW() - INTERVAL '48 hours') +
-        (SELECT COUNT(*) FROM despesas WHERE user_id = $1 AND criado_em >= NOW() - INTERVAL '48 hours')
+        (SELECT COUNT(*) FROM vendas   WHERE user_id = $1 AND data = $2) +
+        (SELECT COUNT(*) FROM despesas WHERE user_id = $1 AND data = $2)
       ) AS total
-    `, [userId])
+    `, [userId, hoje])
     return parseInt(res.rows[0]?.total || 0)
   } catch (err) {
     console.error(`[CRON] Erro ao verificar atividade do usuário ${userId}:`, err.message)
