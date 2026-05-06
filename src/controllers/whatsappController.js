@@ -1177,12 +1177,8 @@ const registerPhone = async (req, res) => {
     )
     const primeiroNome = nomeResult.rows[0]?.nome?.split(' ')[0] || 'usuário'
 
-    try {
-      const msgBoasVindas = `Olá, ${primeiroNome}! 👋\n\nSou o *Nexor AI*, seu assistente financeiro no WhatsApp.\n\nVocê pode me mandar mensagens como:\n• "Vendi 2 camisetas por R$ 80"\n• "Qual meu lucro esse mês?"\n• "Registra uma despesa de R$ 150"\n• "Como tá meu estoque?"\n\nQualquer dúvida é só chamar. Vamos nessa! 🚀`
-      await sendMessage(finalPhone, msgBoasVindas)
-    } catch (errMsg) {
-      console.error('[registerPhone] Falha ao enviar boas-vindas:', errMsg)
-    }
+    const msgBoasVindas = `Olá, ${primeiroNome}! 👋\n\nSou o *Nexor AI*, seu assistente financeiro no WhatsApp.\n\nVocê pode me mandar mensagens como:\n• "Vendi 2 camisetas por R$ 80"\n• "Qual meu lucro esse mês?"\n• "Registra uma despesa de R$ 150"\n• "Como tá meu estoque?"\n\nQualquer dúvida é só chamar. Vamos nessa! 🚀`
+    sendMessage(finalPhone, msgBoasVindas).catch(err => console.error('Erro boas-vindas WhatsApp:', err))
 
     return res.status(201).json({
       sucesso: true,
