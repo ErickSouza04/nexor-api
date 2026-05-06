@@ -54,15 +54,15 @@ const cadastrar = async (req, res) => {
     try {
       await client.query('BEGIN')
 
-      // Novo usuário já cadastra com plano plus ativo
+      // Novo usuário entra como Base (gratuito, sem trial, sem expiração)
       const novoUsuario = await client.query(
         `INSERT INTO usuarios (
            nome, email, senha_hash, tipo_negocio,
            faturamento_medio, gastos_estimados, salario_desejado,
-           nexor_score, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias
+           nexor_score, plan, plano, tipo_plano, ativo
          )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'plus','plus','plus',true,NOW(),30)
-         RETURNING id, nome, email, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'base','ativo','base',true)
+         RETURNING id, nome, email, plan, plano, tipo_plano, ativo,
                    tipo_negocio, faturamento_medio, criado_em`,
         [
           nome.trim(),
@@ -94,7 +94,7 @@ const cadastrar = async (req, res) => {
 
       res.status(201).json({
         sucesso: true,
-        mensagem: 'Conta criada com sucesso! Você tem 7 dias grátis.',
+        mensagem: 'Conta criada com sucesso! Bem-vindo ao Nexor.',
         token: accessToken,
         refresh_token: refreshTokenValue,
         usuario: {
