@@ -169,7 +169,7 @@ Agente (sistema retorna automaticamente):
 "✅ Despesa registrada!
 💸 embalagem: R$ 200,00
 
-📊 Lucro do dia:
+📊 Lucro do mês:
 Receita: R$ X.XXX,XX
 Despesas: R$ X.XXX,XX
 Lucro: R$ X.XXX,XX (margem X%)
@@ -181,7 +181,7 @@ Agente (sistema retorna automaticamente):
 "✅ Venda registrada!
 💰 produto: R$ 750,00
 
-📊 Lucro do dia:
+📊 Lucro do mês:
 Receita: R$ X.XXX,XX
 Despesas: R$ X.XXX,XX
 Lucro: R$ X.XXX,XX (margem X%)
