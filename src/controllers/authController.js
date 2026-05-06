@@ -54,15 +54,15 @@ const cadastrar = async (req, res) => {
     try {
       await client.query('BEGIN')
 
-      // Novo usuário entra como Base (gratuito, sem trial, sem expiração)
+      // Novo usuário entra com 7 dias de trial do Plus
       const novoUsuario = await client.query(
         `INSERT INTO usuarios (
            nome, email, senha_hash, tipo_negocio,
            faturamento_medio, gastos_estimados, salario_desejado,
-           nexor_score, plan, plano, tipo_plano, ativo
+           nexor_score, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias
          )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'base','ativo','base',true)
-         RETURNING id, nome, email, plan, plano, tipo_plano, ativo,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'plus','trial','plus',true,NOW(),7)
+         RETURNING id, nome, email, plan, plano, tipo_plano, ativo, trial_inicio, trial_dias,
                    tipo_negocio, faturamento_medio, criado_em`,
         [
           nome.trim(),
@@ -94,7 +94,7 @@ const cadastrar = async (req, res) => {
 
       res.status(201).json({
         sucesso: true,
-        mensagem: 'Conta criada com sucesso! Bem-vindo ao Nexor.',
+        mensagem: 'Conta criada com sucesso! Você tem 7 dias grátis do Nexor Plus.',
         token: accessToken,
         refresh_token: refreshTokenValue,
         usuario: {
@@ -388,4 +388,25 @@ const salvarOnboarding = async (req, res) => {
   }
 }
 
-module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me, salvarOnboarding }
+// ── DOWNGRADE PARA BASE ──────────────────────────────────
+const downgradeToBase = async (req, res) => {
+  try {
+    await query(
+      `UPDATE usuarios
+          SET plan          = 'base',
+              plano         = 'ativo',
+              tipo_plano    = 'base',
+              trial_inicio  = NULL,
+              trial_dias    = NULL,
+              atualizado_em = NOW()
+        WHERE id = $1`,
+      [req.userId]
+    )
+    res.json({ sucesso: true, mensagem: 'Plano atualizado para Base' })
+  } catch (err) {
+    console.error('Erro no downgrade para Base:', err)
+    res.status(500).json({ sucesso: false, erro: 'Erro interno do servidor' })
+  }
+}
+
+module.exports = { cadastrar, login, refreshToken, logout, atualizarPerfil, recuperarSenha, statusPlano, me, salvarOnboarding, downgradeToBase }
