@@ -196,6 +196,11 @@ const server = app.listen(PORT, async () => {
   await runMigrations()
   initCronJobs()
 
+  // Diagnóstico de variáveis Stripe no startup
+  console.log('[STRIPE] STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? '✅ definida' : '❌ AUSENTE')
+  console.log('[STRIPE] STRIPE_PRICE_PLUS:', process.env.STRIPE_PRICE_PLUS  ? `✅ ${process.env.STRIPE_PRICE_PLUS}` : '❌ AUSENTE')
+  console.log('[STRIPE] STRIPE_PRICE_BASE:', process.env.STRIPE_PRICE_BASE  ? `✅ ${process.env.STRIPE_PRICE_BASE}` : '❌ AUSENTE')
+
   // ── KEEP-ALIVE: evita cold start no Railway ──────────────
   const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`

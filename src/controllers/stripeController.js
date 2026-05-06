@@ -96,6 +96,7 @@ const createCheckoutSession = async (req, res) => {
 
   } catch (err) {
     console.error('[STRIPE] Erro ao criar checkout session:', err)
+    console.error('Stripe checkout error:', err.message)
     res.status(500).json({ sucesso: false, erro: 'Erro ao iniciar checkout' })
   }
 }
