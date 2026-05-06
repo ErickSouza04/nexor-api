@@ -30,6 +30,7 @@ router.post('/auth/refresh',                          authCtrl.refreshToken)
 router.post('/auth/logout',          autenticar,      authCtrl.logout)
 router.post('/auth/recuperar-senha',                  authCtrl.recuperarSenha)
 router.get ('/auth/plano',           autenticar,      authCtrl.statusPlano)
+router.put ('/auth/downgrade-to-base', autenticar,    authCtrl.downgradeToBase)
 
 // ── STRIPE WEBHOOK ───────────────────────────────────────
 // O express.raw() é aplicado em server.js (antes do express.json()) para garantir

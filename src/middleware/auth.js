@@ -33,29 +33,14 @@ const CTA_PLANOS = {
 
 // ── Calcula status do plano em tempo real ──────────────
 const calcularStatusPlano = (usuario) => {
-  const tipo = usuario.tipo_plano || 'trial'
   const plan = usuario.plan || 'base'
 
-  if (usuario.plano === 'ativo') {
-    // Usa plan (base/plus) para rótulo e preço; fallback para tipo_plano
-    const preco = PRECOS_PLAN[plan] || PRECOS_PLANO[tipo] || null
-    return {
-      plano:         'ativo',
-      tipo_plano:    tipo,
-      plan:          plan,
-      rotulo:        ROTULOS_PLAN[plan] || ROTULOS_PLANO[tipo] || 'Plano Ativo',
-      preco:         preco?.valor || null,
-      periodo:       preco?.periodo || null,
-      diasRestantes: null,
-      expirado:      false,
-      cta_planos:    tipo === 'demo' ? CTA_PLANOS : null,
-    }
-  }
-
+  // Plano cancelado via Stripe — bloqueia tudo
   if (usuario.plano === 'cancelado') {
     return {
       plano:         'cancelado',
-      tipo_plano:    tipo,
+      tipo_plano:    'base',
+      plan,
       rotulo:        'Plano Cancelado',
       preco:         null,
       periodo:       null,
@@ -64,56 +49,82 @@ const calcularStatusPlano = (usuario) => {
     }
   }
 
-  if (usuario.plan === 'plus') {
-    const preco = PRECOS_PLAN['plus']
-    let diasRestantes = null
-    if (usuario.trial_inicio && usuario.trial_dias) {
-      const inicio = new Date(usuario.trial_inicio)
-      const agora = new Date()
-      const diasPassados = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24))
-      diasRestantes = Math.max(0, usuario.trial_dias - diasPassados)
-    }
-    return {
-      plano:         'plus',
-      tipo_plano:    'plus',
-      plan:          'plus',
-      rotulo:        ROTULOS_PLAN['plus'] || 'Plano Plus',
-      preco:         preco?.valor || null,
-      periodo:       preco?.periodo || null,
-      diasRestantes,
-      expirado:      false,
-    }
-  }
-
-  if (usuario.plan === 'base') {
+  // Base: gratuito permanente, sem expiração
+  if (plan === 'base') {
     const preco = PRECOS_PLAN['base']
     return {
-      plano:         'base',
+      plano:         'ativo',
       tipo_plano:    'base',
       plan:          'base',
-      rotulo:        ROTULOS_PLAN['base'] || 'Plano Base',
-      preco:         preco?.valor || null,
-      periodo:       preco?.periodo || null,
+      rotulo:        ROTULOS_PLAN['base'],
+      preco:         preco.valor,
+      periodo:       preco.periodo,
       diasRestantes: null,
       expirado:      false,
     }
   }
 
-  // trial ou expirado — recalcula sempre
-  const inicio = new Date(usuario.trial_inicio)
-  const agora = new Date()
-  const diasPassados = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24))
-  const diasRestantes = Math.max(0, (usuario.trial_dias || 7) - diasPassados)
-  const expirado = diasRestantes === 0
+  // Plus com assinatura paga ativa
+  if (plan === 'plus' && usuario.plano === 'ativo') {
+    const preco = PRECOS_PLAN['plus']
+    return {
+      plano:         'ativo',
+      tipo_plano:    'plus',
+      plan:          'plus',
+      rotulo:        ROTULOS_PLAN['plus'],
+      preco:         preco.valor,
+      periodo:       preco.periodo,
+      diasRestantes: null,
+      expirado:      false,
+    }
+  }
 
+  // Plus em trial — trial_inicio definido na hora do upgrade
+  if (plan === 'plus' && usuario.trial_inicio) {
+    const inicio = new Date(usuario.trial_inicio)
+    const agora = new Date()
+    const diasPassados = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24))
+    const diasRestantes = Math.max(0, (usuario.trial_dias || 7) - diasPassados)
+    const expirado = diasRestantes === 0
+
+    if (!expirado) {
+      return {
+        plano:         'trial',
+        tipo_plano:    'plus',
+        plan:          'plus',
+        rotulo:        'Teste Grátis Plus',
+        preco:         PRECOS_PLAN['plus'].valor,
+        periodo:       PRECOS_PLAN['plus'].periodo,
+        diasRestantes,
+        expirado:      false,
+        cta_planos:    CTA_PLANOS,
+      }
+    }
+
+    return {
+      plano:         'trial_expirado',
+      tipo_plano:    'plus',
+      plan:          'plus',
+      rotulo:        'Trial Expirado',
+      preco:         PRECOS_PLAN['plus'].valor,
+      periodo:       PRECOS_PLAN['plus'].periodo,
+      diasRestantes: 0,
+      expirado:      true,
+      cta_planos:    CTA_PLANOS,
+    }
+  }
+
+  // Plus sem trial_inicio e sem assinatura ativa
   return {
-    plano:         expirado ? 'expirado' : 'trial',
-    tipo_plano:    'trial',
-    rotulo:        expirado ? 'Teste Expirado' : 'Teste Grátis',
-    preco:         null,
-    periodo:       null,
-    diasRestantes,
-    expirado,
+    plano:         'expirado',
+    tipo_plano:    'plus',
+    plan:          'plus',
+    rotulo:        'Plano Expirado',
+    preco:         PRECOS_PLAN['plus'].valor,
+    periodo:       PRECOS_PLAN['plus'].periodo,
+    diasRestantes: 0,
+    expirado:      true,
+    cta_planos:    CTA_PLANOS,
   }
 }
 
