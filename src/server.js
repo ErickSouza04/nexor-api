@@ -23,7 +23,8 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS trial_inicio          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         ADD COLUMN IF NOT EXISTS trial_dias            INTEGER DEFAULT 7,
         ADD COLUMN IF NOT EXISTS plano_expira          TIMESTAMP WITH TIME ZONE,
-        ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT
+        ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
+        ADD COLUMN IF NOT EXISTS stripe_customer_id    TEXT
     `)
     // Coluna tipo_plano (migration_tipo_plano)
     await client.query(`
@@ -87,29 +88,33 @@ const origensExtras = process.env.ALLOWED_ORIGINS
 
 const origensPermitidas = [...new Set([...ORIGENS_FIXAS, ...origensExtras])]
 
+const corsOpts = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
+    if (origensPermitidas.includes(origin)) return callback(null, true)
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`))
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+}
+
+// ✅ Preflight explícito — responde OPTIONS antes de qualquer rota
+app.options('*', cors(corsOpts))
+
 // ✅ webhook público
 app.use('/api/whatsapp/webhook', cors({
   origin: '*',
   methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200,
 }))
 
 // ✅ CORS restrito para o restante
 app.use((req, res, next) => {
-  if (req.path === '/api/whatsapp/webhook') {
-    return next()
-  }
-
-  return cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true)
-      if (origensPermitidas.includes(origin)) return callback(null, true)
-      return callback(new Error(`CORS bloqueado para origem: ${origin}`))
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-  })(req, res, next)
+  if (req.path === '/api/whatsapp/webhook') return next()
+  return cors(corsOpts)(req, res, next)
 })
 
 // ── 3. RATE LIMITING — Anti força bruta ─────────────────
