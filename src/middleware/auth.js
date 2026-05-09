@@ -83,6 +83,20 @@ const calcularStatusPlano = (usuario) => {
   if (plan === 'plus' && usuario.trial_inicio) {
     const inicio = new Date(usuario.trial_inicio)
     const agora = new Date()
+    // Guard: se trial_inicio chegar como string inválida, trata como expirado
+    if (isNaN(inicio.getTime())) {
+      return {
+        plano:         'trial_expirado',
+        tipo_plano:    'plus',
+        plan:          'plus',
+        rotulo:        'Trial Expirado',
+        preco:         PRECOS_PLAN['plus'].valor,
+        periodo:       PRECOS_PLAN['plus'].periodo,
+        diasRestantes: 0,
+        expirado:      true,
+        cta_planos:    CTA_PLANOS,
+      }
+    }
     const diasPassados = Math.floor((agora - inicio) / (1000 * 60 * 60 * 24))
     const diasRestantes = Math.max(0, (usuario.trial_dias || 7) - diasPassados)
     const expirado = diasRestantes === 0

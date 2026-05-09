@@ -36,6 +36,18 @@ async function runMigrations() {
         ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE
     `)
     await client.query(`UPDATE usuarios SET ativo = TRUE WHERE ativo IS NULL`)
+
+    // Corrige trial_inicio para usuários que receberam NOW() da migration
+    // em vez da data real de cadastro (criado_em). Só afeta usuários Plus
+    // cujo trial_inicio seja posterior ao criado_em (sinal de backfill errado).
+    await client.query(`
+      UPDATE usuarios
+         SET trial_inicio = criado_em
+       WHERE plan = 'plus'
+         AND trial_inicio IS NOT NULL
+         AND criado_em    IS NOT NULL
+         AND trial_inicio > criado_em + INTERVAL '1 second'
+    `)
     console.log('✅ Migrações aplicadas com sucesso.')
   } catch (err) {
     console.error('⚠️  Erro nas migrações (não crítico):', err.message)
