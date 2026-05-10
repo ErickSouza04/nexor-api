@@ -24,7 +24,7 @@ const webhookCtrl = require('../controllers/webhookController')
 
 // ── AUTH (públicas) ──────────────────────────────────────
 router.post('/auth/cadastro',        validarCadastro, authCtrl.cadastrar)
-router.post('/auth/cadastrar',                        authCtrl.cadastrar)
+router.post('/auth/cadastrar',       validarCadastro, authCtrl.cadastrar)
 router.post('/auth/login',           validarLogin,    authCtrl.login)
 router.post('/auth/refresh',                          authCtrl.refreshToken)
 router.post('/auth/logout',          autenticar,      authCtrl.logout)
@@ -35,7 +35,9 @@ router.put ('/auth/downgrade-to-base', autenticar,    authCtrl.downgradeToBase)
 // ── STRIPE WEBHOOK ───────────────────────────────────────
 // O express.raw() é aplicado em server.js (antes do express.json()) para garantir
 // que o body cru (Buffer) chegue aqui intacto para validação da assinatura Stripe.
-router.post('/webhooks/stripe', webhookCtrl.stripe)
+// Rota legada redirecionada para o handler consolidado em stripeController.
+const stripeCtrl = require('../controllers/stripeController')
+router.post('/webhooks/stripe', stripeCtrl.handleWebhook)
 
 // ── ADMIN (chave secreta no header) ─────────────────────
 router.post('/admin/plano', webhookCtrl.ativarManual)
