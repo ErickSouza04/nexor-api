@@ -71,6 +71,14 @@ const criarProduto = async (req, res) => {
     const custoTotal  = parseFloat(custo) + parseFloat(embalagem || 0)
     const taxa        = parseFloat(taxa_percentual || 0) / 100
     const margem      = parseFloat(margem_desejada) / 100
+
+    if (margem + taxa >= 1) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: 'A soma da margem desejada e da taxa não pode ser igual ou maior que 100%.'
+      })
+    }
+
     const precoSugerido = custoTotal / (1 - margem - taxa)
 
     const resultado = await db.queryWithUser(userId,

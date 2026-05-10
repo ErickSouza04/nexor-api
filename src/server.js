@@ -152,8 +152,9 @@ app.use('/api/admin',        limiteAdmin)
 // Estes middlewares DEVEM ficar antes do express.json(). express.raw() define req._body=true
 // e express.json() verifica esse flag antes de parsear — garantindo que o body não seja
 // re-processado.
-app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }))  // webhook legado
-app.use('/api/stripe/webhook',  express.raw({ type: 'application/json' }))  // novo webhook (planos base/plus)
+// Ambas as rotas usam o mesmo handler; raw body necessário para validar assinatura Stripe
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }))
+app.use('/api/stripe/webhook',  express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '10kb' }))
 app.use(express.urlencoded({ extended: false, limit: '10kb' }))
 

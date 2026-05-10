@@ -127,7 +127,8 @@ async function ativarPlano(email, subscriptionId, planoTipo) {
 
   const resultado = await query(
     `UPDATE usuarios
-     SET plano = 'ativo',
+     SET plan = 'plus',
+         plano = 'ativo',
          tipo_plano = $3,
          stripe_subscription_id = $2,
          plano_expira = NULL,
