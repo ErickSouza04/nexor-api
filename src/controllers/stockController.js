@@ -168,7 +168,7 @@ const registrarMovimentacao = async (req, res) => {
     const resultado = await transaction(userId, async (client) => {
       // Busca produto e verifica dono (RLS já configurado pelo transaction())
       const produto = await client.query(
-        'SELECT id, current_stock FROM products WHERE id = $1 AND user_id = $2',
+        'SELECT id, current_stock FROM products WHERE id = $1 AND user_id = $2 FOR UPDATE',
         [product_id, userId]
       )
       if (produto.rows.length === 0) {

@@ -76,7 +76,7 @@ async function runDailyAlerts() {
     try {
       const atividade = await contarAtividadeRecente(user.id)
       if (atividade === 0) {
-        const primeiroNome = user.nome.split(' ')[0]
+        const primeiroNome = (user.nome || 'usuário').split(' ')[0]
         const msg =
           `Oi ${primeiroNome}! 👋 Notei que não registrei nenhuma movimentação sua hoje.\n\n` +
           `Teve alguma venda ou despesa? Me conta que eu anoto pra você! 😊`
@@ -200,7 +200,7 @@ async function runWeeklySummary() {
         getMetaMensal(user.id),
       ])
 
-      const primeiroNome = user.nome.split(' ')[0]
+      const primeiroNome = (user.nome || 'usuário').split(' ')[0]
       const margem       = semanaAtual.receita > 0
         ? ((semanaAtual.lucro / semanaAtual.receita) * 100).toFixed(0)
         : '0'
