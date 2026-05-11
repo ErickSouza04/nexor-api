@@ -31,8 +31,8 @@ async function detectWeakDayPattern(userId) {
         SUM(valor)                  AS total_dia
       FROM vendas
       WHERE user_id = $1
-        AND data >= CURRENT_DATE - INTERVAL '30 days'
-        AND data <  CURRENT_DATE
+        AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '30 days'
+        AND data <  (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE
       GROUP BY data, EXTRACT(DOW FROM data)
       ORDER BY data
     `, [userId])

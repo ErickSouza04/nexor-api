@@ -145,7 +145,10 @@ async function buscarLucroDia(userId) {
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,
-      `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
+      `SELECT
+         COALESCE(SUM(valor), 0) AS total,
+         COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+       FROM vendas
        WHERE user_id = $1 AND data = $2`,
       [userId, dataHoje]
     ),
@@ -157,8 +160,9 @@ async function buscarLucroDia(userId) {
   ])
 
   const receita  = parseFloat(vendasRes.rows[0].total)
+  const lucroVendas = parseFloat(vendasRes.rows[0].lucro_vendas)
   const despesas = parseFloat(despesasRes.rows[0].total)
-  const lucro    = receita - despesas
+  const lucro    = lucroVendas - despesas
   const margem   = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
 
   return { receita, despesas, lucro, margem: parseFloat(margem) }
@@ -170,7 +174,8 @@ async function buscarLucroOntem(userId) {
 
   const [vendasRes, despesasRes] = await Promise.all([
     queryWithUser(userId,
-      `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
+      `SELECT COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+       FROM vendas
        WHERE user_id = $1 AND data = $2`,
       [userId, dataOntem]
     ),
@@ -181,7 +186,7 @@ async function buscarLucroOntem(userId) {
     ),
   ])
 
-  return parseFloat(vendasRes.rows[0].total) - parseFloat(despesasRes.rows[0].total)
+  return parseFloat(vendasRes.rows[0].lucro_vendas) - parseFloat(despesasRes.rows[0].total)
 }
 
 // ── Gera frase motivacional baseada no desempenho ────────
@@ -198,7 +203,7 @@ function gerarFraseMotivacional({ margem = 0, percentualMeta = null, lucroCresce
 
 // ── Nome do mês atual em PT-BR ───────────────────────────
 function nomeMesAtual() {
-  return new Date().toLocaleString('pt-BR', { month: 'long' })
+  return new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })
 }
 
 // ─────────────────────────────────────────────────────────
@@ -750,7 +755,10 @@ async function handleConsultaLucro(userId, periodo, userContext) {
 
   const [vendas, despesas] = await Promise.all([
     queryWithUser(userId,
-      `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas
+      `SELECT
+         COALESCE(SUM(valor), 0) AS total,
+         COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+       FROM vendas
        WHERE user_id = $1 AND data >= $2 AND data <= $3`,
       [userId, inicio, fim]
     ),
@@ -762,8 +770,9 @@ async function handleConsultaLucro(userId, periodo, userContext) {
   ])
 
   const receita    = parseFloat(vendas.rows[0].total)
+  const lucroVendas = parseFloat(vendas.rows[0].lucro_vendas)
   const custos     = parseFloat(despesas.rows[0].total)
-  const lucro      = receita - custos
+  const lucro      = lucroVendas - custos
   const proLabore  = userContext?.proLabore && userContext.proLabore > 0 ? userContext.proLabore : 0
   const lucroFinal = proLabore > 0 ? lucro - proLabore : lucro
   const labelLucro = proLabore > 0 ? 'Lucro líquido' : 'Lucro'
@@ -940,7 +949,10 @@ const handleWebhook = async (req, res) => {
           [userId, mesNum, anoAtual]
         ).catch(() => ({ rows: [] })),
         queryWithUser(userId,
-          `SELECT COALESCE(SUM(valor), 0) AS total FROM vendas WHERE user_id = $1 AND data >= $2 AND data <= $3`,
+          `SELECT
+             COALESCE(SUM(valor), 0) AS total,
+             COALESCE(SUM(valor - COALESCE(cost_price_snapshot, 0)), 0) AS lucro_vendas
+           FROM vendas WHERE user_id = $1 AND data >= $2 AND data <= $3`,
           [userId, inicioMes, fimMes]
         ),
         queryWithUser(userId,
@@ -960,8 +972,9 @@ const handleWebhook = async (req, res) => {
         : (user.pro_labore && parseFloat(user.pro_labore) > 0 ? parseFloat(user.pro_labore) : null)
 
       const receita        = parseFloat(vendasMesRes.rows[0].total)
+      const lucroVendas    = parseFloat(vendasMesRes.rows[0].lucro_vendas)
       const despesas       = parseFloat(despesasMesRes.rows[0].total)
-      const lucro          = receita - despesas
+      const lucro          = lucroVendas - despesas
       const margem         = receita > 0 ? ((lucro / receita) * 100).toFixed(1) : '0.0'
       const lucroLiquido   = proLabore && proLabore > 0 ? lucro - proLabore : lucro
       const lucroProjetado = diaAtual > 0 ? (lucroLiquido / diaAtual) * diasNoMes : 0

@@ -219,7 +219,7 @@ const comparacaoMeses = async (req, res) => {
          SUM(valor - COALESCE(cost_price_snapshot, 0)) AS lucro_vendas,
          COUNT(*) AS qtd_vendas
        FROM vendas
-       WHERE user_id = $1 AND data >= NOW() - INTERVAL '6 months'
+       WHERE user_id = $1 AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '6 months'
        GROUP BY 1, 2 ORDER BY 1, 2`,
       [userId]
     )
@@ -230,7 +230,7 @@ const comparacaoMeses = async (req, res) => {
          EXTRACT(MONTH FROM data) AS mes,
          SUM(valor) AS total_despesas
        FROM despesas
-       WHERE user_id = $1 AND data >= NOW() - INTERVAL '6 months'
+       WHERE user_id = $1 AND data >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::DATE - INTERVAL '6 months'
        GROUP BY 1, 2 ORDER BY 1, 2`,
       [userId]
     )

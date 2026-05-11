@@ -1,5 +1,6 @@
 // src/controllers/metasController.js
 const { queryWithUser } = require('../config/database')
+const { getDataBrasil }  = require('../utils/dateUtils')
 
 const listar = async (req, res) => {
   try {
@@ -20,10 +21,10 @@ const salvar = async (req, res) => {
     const userId = req.userId
     const { valor_meta, pro_labore } = req.body
 
-    // mes e ano são opcionais — default para o mês/ano atual se não enviados
-    const now = new Date()
-    const mes = req.body.mes != null ? parseInt(req.body.mes) : now.getMonth() + 1
-    const ano = req.body.ano != null ? parseInt(req.body.ano) : now.getFullYear()
+    // mes e ano são opcionais — default para o mês/ano atual no fuso de Brasília
+    const hoje = getDataBrasil()
+    const mes = req.body.mes != null ? parseInt(req.body.mes) : parseInt(hoje.slice(5, 7))
+    const ano = req.body.ano != null ? parseInt(req.body.ano) : parseInt(hoje.slice(0, 4))
 
     console.log('[metas/salvar] params:', { valor_meta, mes, ano, pro_labore, userId })
 
