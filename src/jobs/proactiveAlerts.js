@@ -122,9 +122,10 @@ async function getResumoFinanceiro(userId, dataInicio, dataFim) {
 // Retorna a meta de lucro do mês corrente (tabela metas > meta_lucro do perfil)
 async function getMetaMensal(userId) {
   try {
-    const agora = new Date()
-    const mes   = agora.getMonth() + 1
-    const ano   = agora.getFullYear()
+    const hoje = getDataBrasil()
+    const [anoS, mesS] = hoje.split('-')
+    const mes = parseInt(mesS)
+    const ano = parseInt(anoS)
 
     const metaRes = await queryWithUser(userId,
       `SELECT valor_meta FROM metas WHERE user_id = $1 AND mes = $2 AND ano = $3 LIMIT 1`,
@@ -170,26 +171,25 @@ async function runWeeklySummary() {
     return
   }
 
-  const agora = new Date()
+  const hoje = getDataBrasil()
+  const [anoS, mesS, diaS] = hoje.split('-')
+  const anoN = parseInt(anoS), mesN = parseInt(mesS), diaN = parseInt(diaS)
 
-  // Semana atual: últimos 7 dias (incluindo hoje = domingo)
-  const fimSemana   = new Date(agora)
-  fimSemana.setHours(23, 59, 59, 999)
-  const inicioSemana = new Date(agora)
-  inicioSemana.setDate(agora.getDate() - 6)
-  inicioSemana.setHours(0, 0, 0, 0)
+  // UTC noon garante que getUTCDay() retorna o dia correto no fuso de Brasília
+  const noonHoje  = new Date(Date.UTC(anoN, mesN - 1, diaN, 12))
+  const diaSemana = noonHoje.getUTCDay() // 0 = Dom
 
-  // Semana anterior
-  const fimSemanaAnterior   = new Date(inicioSemana)
-  fimSemanaAnterior.setDate(fimSemanaAnterior.getDate() - 1)
-  fimSemanaAnterior.setHours(23, 59, 59, 999)
-  const inicioSemanaAnterior = new Date(fimSemanaAnterior)
-  inicioSemanaAnterior.setDate(fimSemanaAnterior.getDate() - 6)
-  inicioSemanaAnterior.setHours(0, 0, 0, 0)
+  // Semana atual: domingo desta semana até hoje (strings 'YYYY-MM-DD')
+  const inicioSemana = getDataBrasil(new Date(Date.UTC(anoN, mesN - 1, diaN - diaSemana, 12)))
+  const fimSemana    = hoje
 
-  // Mês inteiro (para cálculo do % da meta mensal)
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1)
-  const fimMes    = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59)
+  // Semana anterior: 7 dias corridos antes desta semana
+  const fimSemanaAnterior    = getDataBrasil(new Date(Date.UTC(anoN, mesN - 1, diaN - diaSemana - 1, 12)))
+  const inicioSemanaAnterior = getDataBrasil(new Date(Date.UTC(anoN, mesN - 1, diaN - diaSemana - 7, 12)))
+
+  // Mês inteiro: 1º dia até último dia do mês corrente
+  const inicioMes = `${anoS}-${mesS}-01`
+  const fimMes    = getDataBrasil(new Date(Date.UTC(anoN, mesN, 0, 12))) // dia 0 do mês seguinte = último dia deste mês
 
   for (const user of users) {
     try {
